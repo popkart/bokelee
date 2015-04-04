@@ -4,8 +4,9 @@
 ```
 :w xx.txt #Save as xx.txt
 
-:w 2,10 xx.txt # Partial saving. Save content between line 2 and 10 to xx.txt
+:2,10w xx.txt # Partial saving. Save content between line 2 and 10 to xx.txt
 
+:1,100y #yank 1-100行。
 :!pwd #execute pwd command. So, :! can execute linux command
 
 :r xx.txt # insert the content of xx.txt into  current cursor position.
