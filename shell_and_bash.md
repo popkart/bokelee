@@ -22,7 +22,7 @@
 		%{$GREEN_BOLD%}%n@%m%{$WHITE%}:%{$YELLOW%}%~%u$(parse_git_dirty)
 		$(git_prompt_ahead)%{$RESET_COLOR%}
 		%{$BLUE%}>%{$RESET_COLOR%} '
-引为包含了Git相关内容显示，所以显得复杂，显示出来就是：
+因为包含了Git相关内容显示，所以显得复杂，显示出来就是：
 `lz@mac:~/Documents/mddocs`
 * `$`也是一个变量，代表的是当前shell的PID，所以可以`echo $$`显示PID。
 * `?`变量代表上一个命令执行完后的返回值。正确则为0.`echo $?`
@@ -33,7 +33,7 @@
 * declare 
 
 ```
-# declare [-aixr] variable选项参数:-a :将后面名为 variable 的变量定义成为数组 (array) 类型-i :将后面名为 variable 的变量定义成为整数数字 (integer) 类型-x :用法不 export 一样,就是将后面的 variable 变成环境变量;-r :将变量指定为 readonly 类型,该变量不能被改变，且不能 unset
+# declare [-aixr] variable选项参数:-a :将后面名为 variable 的变量定义成为数组 (array) 类型-i :将后面名为 variable 的变量定义成为整数数字 (integer) 类型-x :用法和 export 一样,就是将后面的 variable 变成环境变量;-r :将变量指定为 readonly 类型,该变量不能被改变，且不能 unset
 example：
 $sum=50+20+30
 $echo $sum
@@ -90,7 +90,7 @@ non-login shell只读取`~/.bashrc`（如果用的是bash的情况下），有�
 ### 一些shell常用命令
 * cut
 `echo $PATH | cut -d ':' -f 3,5`：取出PATH变量的第3、5个路径。 cut：***对每行操作***，`-d`指定分隔符，注意分割时连续分隔符并不会当作一个分隔符，`-f 数字`指定取出分割后的第几列。`cut -c 数字`代表取出第几个字符，`-c 数字-`指从第几个字符之后的所有字符，`-c 数字－数字`指从第几个字符到第几个字符。
-* grep
+* grep ：最后可跟多个文件哦～
 		[root@www ~]# grep [-acinv] [--color=auto] '搜寻字符串' filename 		参数:		-a :将 binary 档案以 text 档案方式搜寻数据		-c :计算'搜寻字符串' 出现次数		-i :忽略大小写		-n :输出行号		-v :反向选择,亦即显示出没有 '搜寻字符串' 内容的行! 
 		--color=auto :高亮显示搜索串!
 * sort
