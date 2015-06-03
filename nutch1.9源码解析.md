@@ -143,14 +143,14 @@ Nutch各个模块之间的数据交互是通过HDFS来进行的，所以每个�
 ### 执行流程
 #### 总体流程-crawldb不存在时
 1. 创建临时目录temp_dir
-2. sortJob<url_dir,temp_dir,InjectMapper,InjectReducer>
+2. sortJob<url_dir,temp_dir,InjectMapper,InjectReducer在这里只有inject的URL，其实跳过了合并的逻辑>, job直接输出`MapFile`格式文件。
 3. CrawlDb.install(sortJob,crawldb_dir)//将crawldb的current目录rename为old，将job输出目录rename为crawldb的current。
 
 ####总体流程-crawldb存在时
 
 1. 创建临时目录temp_dir
-2. sortJob<url_dir,temp_dir,InjectMapper> `无Reduce，Reduce在mergeJob做`
-3. mergeJob<temp_dir,crawldb_temp_dir,CrawlDbFilter(map),CrawlDbReducer(reduce),`InjectReducer(reduce)`>
+2. sortJob<url_dir,temp_dir,InjectMapper> `无Reduce，Reduce在mergeJob做`，只有一个Map，生产SequenceFile格式文件。
+3. mergeJob<temp_dir,crawldb_temp_dir,CrawlDbFilter(map)URL规范化和过滤,CrawlDbReducer(reduce)合并new page entries with exists entries,`InjectReducer(reduce)`然后再和inject的合并，注意和crawldb不存在的区别> 输入目录为temp_dir还有**current？**输出是MapFile格式文件。
 4. CrawlDb.install(mergeJob,crawldb_dir)//将crawldb的current目录rename为old，将job输出目录rename为crawldb的current。
 
 
@@ -180,3 +180,26 @@ Nutch各个模块之间的数据交互是通过HDFS来进行的，所以每个�
 ### 脚本调用方法
 `Usage: Generator <crawldb><segments_dir> [-force] [-topN N] [-numFetchers numFetchers] [-adddaysnumDays] [-noFilter] [-noNorm][-maxNumSegments num]`
 从crawldb产生待爬取URL到segments目录。
+### 执行流程
+
+1. 在`map.temp.dir`里创建一个临时目录temp_dir。
+2. 按照score排序，并在临时目录里生成多个fetchlist。generateJob<crawldb/current, temp_dir,sequenceFile->sequenceFile,Mapper:Selector,Partitioner:Selector,Reducer:Selector,output:<FloatWritable,SelectorEntry,DecreasingFloatComparator>,OutputFormat:GeneratorOutputFormat>。
+3. 从临时目录生成segments，原则是临时目录里有几个以`fetchlist-`开头的文件夹，就产生几个job，生成几个segment和子目录`crawl_generate`。
+
+### 相关子流程
+#### Selector.mapper
+1. 调用filters过滤该URL。通过则继续。
+2. 检查是否在爬取日程上，比如有的URL可能设置爬取间隔很大（上次爬取时间+爬取间隔 > 当前时间），故不爬取。
+3. 进行评分，方法是设置初始分值1分，调用一系列scoreFilters（责任链），不断更新分数，最后得出一个分值。这些打分器有的原分值直接返回(generatorSortValue)，有的将原分值*crawlDatum里的score(OPICScoringFilter)，还有按链接的depth打分的等。。
+4. 设置CrawlDatum的genTime，设置该SelectorEntry，设置score为key，SelectorEntry为value输出。
+
+#### Selector.Partitoner
+虽然重写了getPartition方法，但是其实是调用了URLPartitioner的getPartition方法，只使用了URL作为分区依据。可以根据Host、Domain、IP（在这里调用`InetAddress.getByName(url.getHost())`解析出IP）3种方式（`partition.url.mode`进行配置）来计算hashcode，进而分区。这样相同的Host（或IP等）就分到一个分区下。
+
+#### Selector.Reducer
+因为Reduce处理之前所有URL已经按照score倒序排好了，所以我们取limit（topN/Partition数，Partition数也即Reduce数）个URL即可。类的私有变量count记录了一个Reduce已经取了多少个URL。以byHost为例。  
+如果`generate.max.count`不为-1（默认-1），逻辑有点麻烦，意味着需要判断host/domain下的URL个数是否达到限制，这个详见源码。为-1不必考虑这个问题。
+然后设置SelectorEntry的segmentNum为1，2，3。。。（如果设置了`generate.max.num.segments`，则一个Reduce可产生多个segment，每个segment都能有limit个URL，没设置则只能产生1个segment）。
+#### GeneratorOutputFormat
+这个类定义了输出的文件名格式为：“fetchlist-segmentNum/name”，name据推断是part-000N这类玩意。自定义输出格式其实就是自定义了个输出文件名。
+### 相关数据结构
