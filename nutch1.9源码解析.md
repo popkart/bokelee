@@ -184,9 +184,10 @@ Nutch各个模块之间的数据交互是通过HDFS来进行的，所以每个�
 
 1. 在`map.temp.dir`里创建一个临时目录temp_dir。
 2. 按照score排序，并在临时目录里生成多个fetchlist。generateJob<crawldb/current, temp_dir,sequenceFile->sequenceFile,Mapper:Selector,Partitioner:Selector,Reducer:Selector,output:<FloatWritable,SelectorEntry,DecreasingFloatComparator>,OutputFormat:GeneratorOutputFormat>。
-3. 从临时目录生成segments，原则是临时目录里有几个以`fetchlist-`开头的文件夹，就产生几个job，生成几个segment和子目录`crawl_generate`。
+3. 从临时目录生成segments，原则是临时目录里有几个以`fetchlist-`开头的文件夹，就产生几个job，生成几个segment，每个segment里产生一个子目录`crawl_generate`。partitionSegmentJob<temp_dir/fetchlist-N,segments/当前时间命名的文件夹/crawl_generate,sequenceFile->sequenceFile,Mapper:SelectorInverseMapper,Partitioner:URLPartitioner,Reducer:PartitionReducer,Output:<Text,CrawlDatum,HashComparator>>
 
 ### 相关子流程
+
 #### Selector.mapper
 1. 调用filters过滤该URL。通过则继续。
 2. 检查是否在爬取日程上，比如有的URL可能设置爬取间隔很大（上次爬取时间+爬取间隔 > 当前时间），故不爬取。
@@ -200,6 +201,31 @@ Nutch各个模块之间的数据交互是通过HDFS来进行的，所以每个�
 因为Reduce处理之前所有URL已经按照score倒序排好了，所以我们取limit（topN/Partition数，Partition数也即Reduce数）个URL即可。类的私有变量count记录了一个Reduce已经取了多少个URL。以byHost为例。  
 如果`generate.max.count`不为-1（默认-1），逻辑有点麻烦，意味着需要判断host/domain下的URL个数是否达到限制，这个详见源码。为-1不必考虑这个问题。
 然后设置SelectorEntry的segmentNum为1，2，3。。。（如果设置了`generate.max.num.segments`，则一个Reduce可产生多个segment，每个segment都能有limit个URL，没设置则只能产生1个segment）。
+
+#### SelectorInverseMapper.Mapper
+因为上一步已经选出URL的list，所以这一步仅仅是取<URL，selectorEntity>输出。
+
+#### URLPartitioner
+上一步partitioner已经介绍。
+
+#### PartitionReducer.Reducer
+这一步取<URL，CrawlDatum>输出。其实这个Reduce一个key（URL）的values集合只应有一个SelectorEntry元素。这样说来`这个Reduce是多余的？`是否只要一个Map就可以了？  
+如果只有Map是否就没有Partition了，这个Partition似乎`也是多余的？`因为即使partition了他们也是在一个输出目录。而上一步的partition会让不同partition的URL被不同的reducer处理，最终放入不同的fetchlist-x目录。  
+最后这个排序`似乎也是多余的`，排序的比较器是HashComparator，排序依据是URL的hash值。。没啥用啊这个排序。还不如一个Map直接<URL，CrawlDatum>输出算了。其实这个hash也算个随机，防止URL按照字符序排列，尽量打散这些URL。  
+上一个job分区使同一个host或domain等的URL处于一个reducer里，避免对同一个host或domain下的URL并行爬取，这个job对同一个分区内的URL按照hash进行了随机打散，避免同一个host下的URL排在一起。
+
+
 #### GeneratorOutputFormat
-这个类定义了输出的文件名格式为：“fetchlist-segmentNum/name”，name据推断是part-000N这类玩意。自定义输出格式其实就是自定义了个输出文件名。
+这个类只重写了generateFileNameForKeyValue方法，定义了输出的文件名格式为：“fetchlist-segmentNum/name”，name据推断是part-000N这类玩意。自定义输出格式除了文件名之外还有其他的一些设置。如常见的SequenceFileOutputFormat直接继承自FileOutPutFormat，而我们这个GeneratorOutputFormat为了实现重命名的功能继承关系为：`GeneratorOutputFormat->MultipleSequenceFileOutputFormat->MultipleOutputFormat(这货有命名的功能，因此可以多个目录输出)->FileOutputFormat`
 ### 相关数据结构
+#### SelectorEntry
+是segNum、URL、CrawlDatum的简单包装。segNum是segment的编号，取值1，2，3...
+### 其他问题
+#### 每个reducer生成的fetchlist中究竟有多少个url？受哪些参数控制？（见参考的博客内容）--> 一轮Generate我们生成了多少个URL？
+每个reducer能生成的fetchlist个数为maxNumSegments个，该参数由命令行传入。而每个fetchlist里面含有多少个url主要由参数topN和reducer的个数N控制，为limit=topN/N个，但是也受到generate.max.count和generate.count.mode参数控制，如果满足1）host/domain的种类足够多，并且2）crawldb中url个数足够多的话，每个fetchlist中URL的个数肯定能达到上限limit，generate.max.count和generate.count.mode参数只能控制里面url的分布而已。但是如果不满足这2个条件中任何一个的话，可能会出现fetchlist“装不满”的情况。  
+由上面的分析可以看出，如果URL足够多，则：
+
+		最后生成的segments共包含的URL个数=reduce个数*maxNumSegments*limit
+		                             =reduce个数*maxNumSegments*topN/reduce个数
+		                             =maxNumSegments*topN
+这个URL数量其实是挺大的。但是为什么按照Nutch的默认配置，不管TopN配置多大，一轮抓取都会在基本固定的一个最大时间内完成呢？且看下节Fetcher分解。
