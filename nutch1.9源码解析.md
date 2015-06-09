@@ -198,9 +198,12 @@ Nutch各个模块之间的数据交互是通过HDFS来进行的，所以每个�
 虽然重写了getPartition方法，但是其实是调用了URLPartitioner的getPartition方法，只使用了URL作为分区依据。可以根据Host、Domain、IP（在这里调用`InetAddress.getByName(url.getHost())`解析出IP）3种方式（`partition.url.mode`进行配置）来计算hashcode，进而分区。这样相同的Host（或IP等）就分到一个分区下。
 
 #### Selector.Reducer
-因为Reduce处理之前所有URL已经按照score倒序排好了，所以我们取limit（topN/Partition数，Partition数也即Reduce数）个URL即可。类的私有变量count记录了一个Reduce已经取了多少个URL。以byHost为例。  
+我们这里讨论一个Reduce。  
+因为该Reduce处理之前所有URL已经按照score倒序排好了，所以我们取limit（topN/Partition数，Partition数也即Reduce数）个URL即可。类的私有变量count记录了一个Reduce已经取了多少个URL。以byHost为例。  
 如果`generate.max.count`不为-1（默认-1），逻辑有点麻烦，意味着需要判断host/domain下的URL个数是否达到限制，这个详见源码。为-1不必考虑这个问题。
-然后设置SelectorEntry的segmentNum为1，2，3。。。（如果设置了`generate.max.num.segments`，则一个Reduce可产生多个segment，每个segment都能有limit个URL，没设置则只能产生1个segment）。
+然后依次取够segmentNum（如果其不为1）遍limit，设置SelectorEntry的segmentNum为1，2，3。。。（如果设置了`generate.max.num.segments`，则一个Reduce可产生多个segment，每个segment都能有limit个URL，没设置则只能产生1个segment）。  
+举个例子，如果segmentNum的数量为2，一共有4个Reduce，TopN=10000，则最后我们在hdfs上segments文件夹下产生了2个时间命名的文件夹，每个文件夹里的crawl_generate文件夹里都应有4个part-0000x文件,每个文件包含item数量为：10000/4=2500。其实这个segmentNum设置成1就行，因为下面Fetching我们就能看到，一个Fetching job是针对segments文件夹下的一个文件夹进行的。一次产生多个还是要手动提交他们到Fetching的job里的。
+
 
 #### SelectorInverseMapper.Mapper
 因为上一步已经选出URL的list，所以这一步仅仅是取<URL，selectorEntity>输出。
@@ -210,7 +213,7 @@ Nutch各个模块之间的数据交互是通过HDFS来进行的，所以每个�
 
 #### PartitionReducer.Reducer
 这一步取<URL，CrawlDatum>输出。其实这个Reduce一个key（URL）的values集合只应有一个SelectorEntry元素。这样说来`这个Reduce是多余的？`是否只要一个Map就可以了？  
-如果只有Map是否就没有Partition了，这个Partition似乎`也是多余的？`因为即使partition了他们也是在一个输出目录。而上一步的partition会让不同partition的URL被不同的reducer处理，最终放入不同的fetchlist-x目录。  
+如果只有Map是否就没有Partition了，这个Partition似乎`也是多余的？`因为即使partition了他们也是在一个输出目录。而上一步的`GeneratorOutputFormat`重写了输出文件名方法`generateFileNameForKeyValue`，会让有不同segNum的URL被放入不同的fetchlist-segNum目录。  
 最后这个排序`似乎也是多余的`，排序的比较器是HashComparator，排序依据是URL的hash值。。没啥用啊这个排序。还不如一个Map直接<URL，CrawlDatum>输出算了。其实这个hash也算个随机，防止URL按照字符序排列，尽量打散这些URL。  
 上一个job分区使同一个host或domain等的URL处于一个reducer里，避免对同一个host或domain下的URL并行爬取，这个job对同一个分区内的URL按照hash进行了随机打散，避免同一个host下的URL排在一起。
 
@@ -222,10 +225,112 @@ Nutch各个模块之间的数据交互是通过HDFS来进行的，所以每个�
 是segNum、URL、CrawlDatum的简单包装。segNum是segment的编号，取值1，2，3...
 ### 其他问题
 #### 每个reducer生成的fetchlist中究竟有多少个url？受哪些参数控制？（见参考的博客内容）--> 一轮Generate我们生成了多少个URL？
-每个reducer能生成的fetchlist个数为maxNumSegments个，该参数由命令行传入。而每个fetchlist里面含有多少个url主要由参数topN和reducer的个数N控制，为limit=topN/N个，但是也受到generate.max.count和generate.count.mode参数控制，如果满足1）host/domain的种类足够多，并且2）crawldb中url个数足够多的话，每个fetchlist中URL的个数肯定能达到上限limit，generate.max.count和generate.count.mode参数只能控制里面url的分布而已。但是如果不满足这2个条件中任何一个的话，可能会出现fetchlist“装不满”的情况。  
+每个reducer能生成的fetchlist个数为maxNumSegments个，该参数由命令行传入(或者配置generate.max.num.segments)。而每个fetchlist里面含有多少个url主要由参数topN和reducer的个数N控制，为limit=topN/N个，但是也受到generate.max.count和generate.count.mode参数控制，如果满足:  
+1）host/domain的种类足够多，并且2）crawldb中url个数足够多的话，每个fetchlist中URL的个数肯定能达到上限limit，generate.max.count和generate.count.mode参数只能控制里面url的分布而已。但是如果不满足这2个条件中任何一个的话，可能会出现fetchlist“装不满”的情况。  
 由上面的分析可以看出，如果URL足够多，则：
 
 		最后生成的segments共包含的URL个数=reduce个数*maxNumSegments*limit
 		                             =reduce个数*maxNumSegments*topN/reduce个数
 		                             =maxNumSegments*topN
-这个URL数量其实是挺大的。但是为什么按照Nutch的默认配置，不管TopN配置多大，一轮抓取都会在基本固定的一个最大时间内完成呢？且看下节Fetcher分解。
+这个Generate的URL数量其实是挺大的。但是在一轮抓取里这些选出来的URL是否都能被抓取一次呢？且看下节Fetcher分解。
+
+## Fetcher
+先来看一下源码里的介绍：  
+具体见源码注释，下面仅列摘要 ^_^  
+基于队列的Fetcher，一个producer（QueueFeeder）用来读取fetchlists，然后把要抓取的FetchItem送给队列们，一群抓取线程从Queues里取item来抓取。队列的个数和host的个数相等。任何时候所有队列里的item的个数会小于一个上限：抓取线程数的N(fetcher.queue.depth.multiplier,default 50)倍。  
+随着抓取的进行，队列里的item会减少，同时producer会进行补充。有时抓取线程也会往队列里添加item，比如遇到重定向时。  
+Fetcher不使用插件机制，而是自己实现了基于host的队列阻塞处理，每个byhost的队列都可以有自己的最大并发请求数、2次URL请求间的抓取间隔等个性设置。  
+如果Queues里还有items，但是这些items都不ready，那么抓取threads会spin-wait直到有item ready，或者等超时了，就abort，认为task is hung。
+
+### 脚本调用方法
+
+	Usage: Fetcher <segment> [-threads n]
+可以看出最多指定segment文件夹、抓取线程数2个参数。注意这里segment指的是segments文件夹里以时间命名的文件夹。每一个Fetcher流程只能处理一个时间文件夹。如果  
+我们查看crawl脚本里，
+	
+	"$bin/nutch" fetch $commonOptions -D fetcher.timelimit.mins=$timeLimitFetch "$CRAWL_PATH"/segments/$SEGMENT -noParsing -threads $numThreads
+里面的参数`-noParsing`并没有什么卵用，源码里根本没用到这个，可能是历史遗留。而放入配置变量内的`fetcher.timelimit.mins`却会起作用，限制了一轮Fetching的最长时间，在这个时间点到了之后，Queue里即不再补充新URL。因此一轮抓取并不一定能够把Segments里的URL都抓完。
+### 执行流程
+
+1. 抓取开始，check是否配置`http.agent.name`，未配置直接退出。设置hadoop推测执行关闭，防止它觉得job太慢又启动一个同样的task。设置timeLimit，最多运行多久后退出。设置`fetcher.follow.outlinks.depth`，设置`fetcher.follow.outlinks.num.links（default 4）`，设置`fetcher.follow.outlinks.depth.diviso(default 2)`，这3个还不知道干啥的。
+2. 抓取job fetch-segment<segments/yyyyMMddhhmmss/crawl_generate,segments/yyyyMMddhhmmss/crawl_fetch,SequeuceFile->SequenceFile,**MapRunner:Fetcher**, Input:InputFormat,output:FetcherOutputFormat<Text,NutchWritable>>.
+
+### 执行子流程
+
+#### Fetcher.run
+这块是Fetcher启动的主流程。  
+注意Fetcher的Map是默认的，也就是IdentityMapper，啥也不做。它实现了MapRunnable接口，启动主流程都在这个run方法里。这里面有几个数据结构，会在下面详细介绍。它的流程如下：  
+1. 创建FetchItemQueues，它包含所有的Queue。
+2. 创建QueueFeeder,负责读取URL到Queues，并启动。
+3. 创建所有的爬取线程。
+4. 设置流量控制相关参数（每秒页面数，记录每秒下载bytes数等）。
+5. 进入循环（主要是做一些状态日志打印，如那个1秒一行的状态信息，还有每秒下载pags数、流量等的统计加和。还有一些策略控制）。循环退出条件是抓取线程数为0。或者System.currentTimeMillis() - lastRequestStart.get()) > timeout（mapred.task.timeout/divisor）直接return。
+#### InputFormat
+为防止Generate生成的part-0000x能顺序读取而不被打散，重写了getSplits方法。这里可以看一下父类FileInputFormat里getSplits方法怎么处理输入文件的。
+
+#### FetcherOutputFormat
+输出这里做了一个判断，针对fetch、content、parse三部分内容存入不同的目录。
+
+#### 
+### 相关数据结构
+
+#### QueueFeeder
+继承自Thread类，我们看它的run方法。里面是个while读取RecordReader，如果队列们不满（FetcherItemQueues.getSize() < threadcount*fetcher.queue.depth.multiplier），就循环往队列里放直到放够为止。如果timeLimit超了，就把RecordReader读完，扔掉，不往队列里放。
+
+#### FetchItemQueues
+这是一个Queues的包装类，里面用Map<String, FetchItemQueue>维持队列们，但是维持了最多threadcount*fetcher.queue.depth.multiplier个抓取URL。提供了一些遍历抓取线程和QueueFeeder的方法。包装了对队列的一些操作。
+我们还是来看看包装的主要方法吧：
+  
+	//添加一个url到Queues，可byHost/byDomain等添加到不同的Queue中
+ 	public void addFetchItem(Text url, CrawlDatum datum);
+
+	//完成一个FetchItem的抓取？仅仅是设置了FetchItem所属队列的nextFetchTime为当前时间（如果asap的话，不然是当前时间+crawlDelay）。
+    public void finishFetchItem(FetchItem it) ;
+
+	//从Queues中取一个FetchItem
+    public synchronized FetchItem getFetchItem();
+    
+    // check是否时间过了，如果过了就清空所有队列并返回清空的FetchItem个数。只在feeder停止后执行。
+    public synchronized int checkTimelimit();
+    // 清空所有Queues并返回清空的FetchItem个数
+    public synchronized int emptyQueues();
+
+#### FetchItemQueue
+这代表一个Queue，处理一堆拥有相同hostId（byHost/Domain/IP等）的FetchItems，同时还记录当前爬虫request的状态，using nextFetchTime（这是一个重要的变量，当前时间只有大于它时，才能从队列中取元素。通过它可以控制线程抓取的间隔），inProgress（正在被抓取的item个数），crawlDalay/minCrawlDelay等变量。  
+当一个Queue的线程数为1时，使用crawlDelay（fetcher.server.delay），大于1时，使用minCrawlDelay（fetcher.server.min.delay）。  
+注意：每个Queue都有crawlDelay这个变量，但是在创建Queue的时候使用的是FetchItemQueues的crawlDelay，所以每个Queue的crawlDelay都一样。如果想针对不同Host/domain/ip设置不同的crawDelay，需要改造Queues的`getFetchItemQueue`方法，在其中的createQueue加入判断设置不同crawlDelay。
+下面看需要注意的方法：  
+	
+	//正在爬取的item个数
+    public int getInProgressSize();
+    
+	//一个item爬取结束了，通知Queue。Queue减少一个正在爬取的item个数，然后设置队列的nextFetchTime，asap的y/n设置nextFetchTime为当前时间/当前时间+crawlDelay
+    public void finishFetchItem(FetchItem it, boolean asap) ;
+ 
+	//一个item爬取开始，通知队列把inProgress计数加1.
+    public void addInProgressFetchItem(FetchItem it) ;
+    
+    //从队列里取一个item。如果条件不满足，返回null。什么是条件不满足？
+    //1. 该Queue正在抓取的线程数大于等于设置的一个Queue的最抓取线程数
+    //2. 当前时间还没到nextFetchTime
+    //3. Queue.size() == 0
+    //满足则：队列第一个元素出队并返回，inProgress++。
+    public FetchItem getFetchItem();
+   
+   	//这个就是设置nextFetchTime的方法。nextFetchTime = endTime（当前item爬完的时间） + delay
+    private void setEndTime(long endTime);
+    
+#### FetchItem
+代表一个要被抓取的item。成员变量包括：  
+URL，CrawlDatum，queueID（每个Queue都有一个String类型的id，作为FetchItemQueues的Queue Map的key，如果byHost这个id就是protocol://HostName，举个栗子：http://music.baidu.com），outlinkDepth（呃，这个东西。。）。  
+它有2个构造函数，同时也有2个静态的create方法。
+
+#### FetcheThread
+最后这个是Fetcher的真正主线。。这才是抓取的线程。它里面的成员变量真是多啊，有URL过滤的，URL分数过滤的，规范化，重定向相关，parse outlink相关的一堆参数。  
+当然这个主线也是一个死循环，循环如下：
+
+1. getFetchItem，如果得不到，则 [判断Feeder挂了&&Queues大小为0 ->`退出`，否则spin-waiting（也就是sleep 500 然后continue）]。
+2. 设置**Fetcher**的lastRequestStart为当前时间。
+3. 进入一个while循环，退出条件是`redirect次数 > maxRedirect次数`，退出后这个URL的抓取就完事了。下面是这个循环内的内容。Robots协议相关内容，不符合，跳过；Robots中设置的crawlDelay过大，跳过。。。 然后就是一个抓取，抓取完成就output，附带parse一下里面的内容，这里根据抓取结果做了很多状态判断，输出，redirect，输出错误等等。
+
+比较重要的是output里面的逻辑。
