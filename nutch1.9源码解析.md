@@ -260,11 +260,13 @@ Fetcher不使用插件机制，而是自己实现了基于host的队列阻塞处
 #### Fetcher.run
 这块是Fetcher启动的主流程。  
 注意Fetcher的Map是默认的，也就是IdentityMapper，啥也不做。它实现了MapRunnable接口，启动主流程都在这个run方法里。这里面有几个数据结构，会在下面详细介绍。它的流程如下：  
+
 1. 创建FetchItemQueues，它包含所有的Queue。
 2. 创建QueueFeeder,负责读取URL到Queues，并启动。
 3. 创建所有的爬取线程。
 4. 设置流量控制相关参数（每秒页面数，记录每秒下载bytes数等）。
 5. 进入循环（主要是做一些状态日志打印，如那个1秒一行的状态信息，还有每秒下载pags数、流量等的统计加和。还有一些策略控制）。循环退出条件是抓取线程数为0。或者System.currentTimeMillis() - lastRequestStart.get()) > timeout（mapred.task.timeout/divisor）直接return。
+
 #### InputFormat
 为防止Generate生成的part-0000x能顺序读取而不被打散，重写了getSplits方法。这里可以看一下父类FileInputFormat里getSplits方法怎么处理输入文件的。
 
@@ -322,7 +324,7 @@ Fetcher不使用插件机制，而是自己实现了基于host的队列阻塞处
     
 #### FetchItem
 代表一个要被抓取的item。成员变量包括：  
-URL，CrawlDatum，queueID（每个Queue都有一个String类型的id，作为FetchItemQueues的Queue Map的key，如果byHost这个id就是protocol://HostName，举个栗子：http://music.baidu.com），outlinkDepth（呃，这个东西。。）。  
+URL，CrawlDatum，queueID（每个Queue都有一个String类型的id，作为FetchItemQueues的Queue Map的key，如果byHost这个id就是protocol://HostName，举个栗子：`http://music.baidu.com`），outlinkDepth（呃，这个东西。。）。  
 它有2个构造函数，同时也有2个静态的create方法。
 
 #### FetcheThread
@@ -333,4 +335,49 @@ URL，CrawlDatum，queueID（每个Queue都有一个String类型的id，作为Fe
 2. 设置**Fetcher**的lastRequestStart为当前时间。
 3. 进入一个while循环，退出条件是`redirect次数 > maxRedirect次数`，退出后这个URL的抓取就完事了。下面是这个循环内的内容。Robots协议相关内容，不符合，跳过；Robots中设置的crawlDelay过大，跳过。。。 然后就是一个抓取，抓取完成就output，附带parse一下里面的内容，这里根据抓取结果做了很多状态判断，输出，redirect，输出错误等等。
 
-比较重要的是output里面的逻辑。
+#### Parse interface
+先介绍下这个接口（下面会用到），它代表了对一个page的raw content的解析结果，有4个方法：
+
+1. String getText(); //page的文本内容。maybe是剔了标签等的文本。
+2. ParseData getData(); //page解析出的其他内容。下面说ParseData
+3. String getContent(); //不解释
+4. boolean isCanonical(); //指示该Parse是原始URL extract出来的还是其一个sub-url extract出来的。
+
+#### ParseData
+成员变量有：
+
+* title
+* Outlink[]
+* contentMeta
+* parseMeta
+* ParseStatus
+
+等。
+
+#### FetchThread.output
+在抓取成功、被deny、出错等等之后，会调用这个方法把结果输出出去。方法输入参数有：URL、datum、Content（抓取网页内容的封装，mimetype、metadata、content等）、ProtocolStatus（抓取Plugin返回的状态）、status（datum里定义的代表URL在Nutch生命周期中的状态）。
+
+1. 设置datum的status为传入的status。
+2. 设置datum的FetchTime为当前时间。
+3. 设置datum的MetaData的 key "\_pst\_" 为ProtocolStatus。
+4. 设置datum的MetaData的 key “Content-Type”为content的contentType（如果非空）。
+5. 设置content的MetaData的 key “nutch.segment.name”为当前segmentName（当前seg的文件夹名）。
+6. 通过`scfilters.passScoreBeforeParsing`方法把datum的score传给content，为给content里解析出的outlinks评score做准备。
+7. 通过`ParseUtil.parse`方法解析content，得到解析结果集ParseResult（一个Map<Text url, Parse>）。
+
+8. if(ParseResult == null)，通过content给datum计算signature，并存入datum的signature。
+9. 把status存入content的MetaData的 key "\_fst\_"（fetch status），下一步parsing会用到。
+10. **output.collect(key, datum)**;
+11. if(content != null && storeingContent) **output.collect(key, content)**;
+12. if(ParseResult != null)，蓝后比较复杂了！因为**一个ParseResult可能包含原始URL的一个Parse结果，也可能包含原始URL派生的URLs或者sub-URLs的解析结果**（0个或多个Parse，**!important后续再研究**）。下面的过程都是`ParseResult != null`才会走的，否则直接return null。
+13. 针对每个<url, Parse>结果，如下过程：
+14. 计算page的signature（通过content，parse，注意如果parse为空则使用一个默认的空parse来计算，如第8步）。
+15. 设置Parse结果的ParseData里面的key “nutch.segment.name”为当前segmentName。设置 key "nutch.content.digest"为signature，设置key “抓取时间”为datum的抓取时间。
+16. 如果该Parse是原始URL parse出来的（url == key，key是最原始的那个URL），设置datum的signature为这个signature。
+17. 通过`scfilters.passScoreAfterParsing（url, content, Parse）`方法把datum的score传给content，注意这里的方法是`After`，后续需要**继续研究**。
+18. 处理解析出的outlinks，这里有个maxOutLinks（每个page解析出的最大ol数，默认100）。还有个maxOutLinkDepth，如果设置了这个还需本次output的outlinkDepth < 它。outlinksDepthDivisor也是这里用到的。然后根据公式：
+`int maxOutlinksByDepth = (int)Math.floor(outlinksDepthDivisor / (outlinkDepth + 1) * maxOutlinkDepthNumLinks);`  
+算出maxOutlinksByDepth，然后这个变量没用到。。怀疑源码里接下来的while条件`outlinkCounter < maxOutlinkDepthNumLinks`写错了，应该是它而不是maxOutlinkDepthNumLinks，因为后者是每层可解析最大outlink数，是配置的变量（默认4）。千辛万苦算出来个maxOutlinksByDepth的目的是，在接下来的while循环里把**maxOutlinksByDepth个URL又包装成FetchItem直接加入抓取队列！**只不过它和其他的FetchItem有下面2点不同：1、它的CrawlDatum的status是`CrawlDatum.STATUS_LINKED`。2、它的`outLinkDepth被+1`了（原始的为0）。这里不太理解的是，貌似Nutch可以在`一轮抓取`里，抓取一个URL的同时，把从它解析出的N层URL都给抓了。
+
+19. 接下来，把上一步筛出来的小于`maxOutLinks`个的outlinks重新写入当前Parse的ParseData（覆盖掉旧的全量解析出的值）。
+20. **output.collect(url, ParseImpl)**;
