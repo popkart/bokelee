@@ -183,8 +183,8 @@ Nutch各个模块之间的数据交互是通过HDFS来进行的，所以每个�
 ### 执行流程
 
 1. 在`map.temp.dir`里创建一个临时目录temp_dir。
-2. 按照score排序，并在临时目录里生成多个fetchlist。generateJob<crawldb/current, temp_dir,sequenceFile->sequenceFile,Mapper:Selector,Partitioner:Selector,Reducer:Selector,output:<FloatWritable,SelectorEntry,DecreasingFloatComparator>,OutputFormat:GeneratorOutputFormat>。
-3. 从临时目录生成segments，原则是临时目录里有几个以`fetchlist-`开头的文件夹，就产生几个job，生成几个segment，每个segment里产生一个子目录`crawl_generate`。partitionSegmentJob<temp_dir/fetchlist-N,segments/当前时间命名的文件夹/crawl_generate,sequenceFile->sequenceFile,Mapper:SelectorInverseMapper,Partitioner:URLPartitioner,Reducer:PartitionReducer,Output:<Text,CrawlDatum,HashComparator>>
+2. 按照score排序，并在临时目录里生成多个fetchlist。generateJob\<crawldb/current, temp_dir,sequenceFile->sequenceFile,Mapper:Selector,Partitioner:Selector,Reducer:Selector,output:\<FloatWritable,SelectorEntry,DecreasingFloatComparator>,OutputFormat:GeneratorOutputFormat>。
+3. 从临时目录生成segments，原则是临时目录里有几个以`fetchlist-`开头的文件夹，就产生几个job，生成几个segment，每个segment里产生一个子目录`crawl_generate`。partitionSegmentJob\<temp_dir/fetchlist-N,segments/当前时间命名的文件夹/crawl_generate,sequenceFile->sequenceFile,Mapper:SelectorInverseMapper,Partitioner:URLPartitioner,Reducer:PartitionReducer,Output:\<Text,CrawlDatum,HashComparator>>
 
 ### 相关子流程
 
