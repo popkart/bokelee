@@ -263,6 +263,231 @@ import一个模块时，搜索路径为：
 
 	import com.apache.module_name.func1
 
-最后一个可以是模块名或者函数名。
+最后一个可以是模块名或者函数名。  
+自己创建的package，每个目录里必须有`__init__.py`这个文件才会被视为一个package，即使这是个空文件。它里面可以包含package的初始化代码或者`__all__`变量。  
+导入包里的模块：
 
-		
+	import Sound.Effects.echo #这种方式import的最后只能是包或者模块，且只能用完整名称来引用，如Sound.Effects.echo.echofilter(input, delay=0.7)。注意这个和模块的引用的区别
+	#或者：
+	from Sound.Effects import echo #这种方式import那边可以是模块或者函数，同时from最后个可以是包或者模块，且可以用echo.echofilter()
+	
+而`from package import *`时，如果`__init__.py`文件定义了`__all__`:  
+
+	__all__ = {"echo", "surround", "reverse"}
+python会按照它来加载函数，不在它里面的就不加载了。 
+
+## 输入输出
+str() repr()  
+### 文件
+
+	f = open(fileName, mode)
+	f.read(size) #返回size个字符的字符串，不指定size则读完。
+	f.readline() #读一行，最后有'\n'，只有文件最后一行没有换行符（如果最后一行就是一个换行符呢？），返回一个空字符串。
+	f.readlines(sizeint) #读多行返回一个list。没有sizeint读完。
+	
+	#loop over f，不用全读完，速度快
+	for line in f:
+		print line
+	
+	f.write(string) #写入string到文件。string需要包含’\n‘
+	f.tell() #返回指针位置，自文件开头到指针处的字节数。
+	f.seek(offset, from_what) #移动指针。offset 可以为负，from_what：0，文件开头，默认；1，当前位置；2，文件末尾。
+#### 序列化
+
+	pickle.dump(x,file) #x 存入文件file
+	x = pickle.load(f) #反序列化
+
+## 错误和异常
+
+1. 捕获异常
+
+```
+try:
+	...
+	...
+except IOError:
+	...
+except(RuntimeError, TypeError):  #多个Error
+	...
+except:	#其他异常会进入这个省略异常名的except
+	print "other errors"
+	raise #抛出去
+else:	#try块可以附带一个else语句，如果未抛出异常，则执行。它是为了避免该try的except意外截获该else代码段里抛出的异常（相对于将else内代码写入try内）。
+	...
+finally:	#不管怎样都会执行，不管在try/except/else中发生异常、被continue/break/return、没发生异常，都会在之后执行。
+	...
+```
+
+2. 处理异常信息	
+except 的第二个参数可以是一个实例，就是抛出的异常实例。
+	
+	except IOError, e:
+		print repr(e.args)
+		x,y = e	#(把异常的2个属性赋予x，y)
+		pring x,y 
+我们可以通过e来得到一些信息，比如，Exception类内建的一些参数，message，args。  
+args是异常作者在抛出异常时指定的参数列表（异常编号，异常信息字符串等），也可以用message.__getitem__(index)来访问第index（从0开始）个参数。  
+python中喜欢直接用元组来接收这个实例e，比如IOError实例附带2个参数，因此一般这么接收：
+
+	except IOError,(x,y):
+		print x,y
+
+3. 抛出异常
+
+```
+try:
+	rasie Exception('xx','yy')	#抛出含有2个参数的异常，下面那个写法风格更好点？
+	raise Exception,('xx','yy') #更常用的写法
+	raise IOError,('a', 'b', 'c', 'd')	#伪造一个IOError
+```
+
+4. 用户定义异常		
+
+```
+>>> class MyError(Exception):
+...     def __init__(self, value): 
+		"""注意这里覆盖了Exception的初始化方法，
+		   故，
+		   args这个参数列表一直为空(打印出来是个”()“)，我们用value这个参数来代替
+		”“”
+...             self.value = value*2
+...     def __str__(self):	#打印
+...             return repr(self.value)
+#测试下：
+>>> try:
+...     raise MyError,4
+... except MyError,ins:
+...     print ins
+...
+8
+#再扯点别的，Python的动态xx
+>>> def wt(self):
+...     return 'xxx:'+repr(self.value)
+>>> MyError.__str__ = wt
+>>> try:
+...     raise MyError,4
+... except MyError,ins:
+...     print ins
+...
+xxx:8
+
+和javascript一样，动态改变类的行为。
+
+```
+
+common practice：定义一个异常基类，针对不同的异常派生子类。大多数异常命名都以`Error`结尾。
+
+## 类
+哎呀这个类。。。像类吗？感觉是多套了一层的模块。
+
+```
+class ClassName:
+    <statement-1>
+    .
+    .
+    .
+    <statement-N>
+
+```
+
+类语句需要先执行才能生效，可以把它放在代码块或者函数里。。  
+支持`属性引用`和`实例化`两种操作。  
+
+```
+class MyClass:
+    """A simple example class"""
+    i = 12345
+    def f(self):
+        return 'hello world'
+```
+
+***如果***定义了`__init__()`方法，实例化的时候会执行它，类似构造函数。
+
+```
+>>> class Complex:
+...     def __init__(self, realpart, imagpart):
+...         self.r = realpart
+...         self.i = imagpart
+...
+>>> x = Complex(3.0, -4.5)
+>>> x.r, x.i
+(3.0, -4.5)
+```
+
+### 不在类体内的方法，一样能挂到类上
+
+```
+# Function defined outside the class
+def f1(self, x, y):
+    return min(x, x+y)
+
+class C:
+    f = f1
+    def g(self):
+        return 'hello world'
+    h = g
+    
+   ```
+ f,h,g都是C的方法。这也体现了python的动态性，可以随时给一个类加一个function。。。
+### self
+注意到方法第一个参数，`self`，python以前难道没有类？这个东西像是用函数曲线实现了类的方法。如果 `x = new C()`，则`C.g(x)`和`x.g()`效果一样。也就是后一种`instance.method`的写法等价于把自己作为第一个参数，和参数列表一起传给了C的函数。
+
+### 每一个值都是对象
+每个值都是对象，因此都有一个类。用`type(object)`查看object的类型，或者用`object.__class__`。  
+### 继承
+
+	class DerivedClassName(modname.BaseClassName):
+
+如果在类中找不到请求调用的属性，就搜索基类。如果基类是由别的类派生而来，这个规则会递归的应用上去。父类搜索路径是从左到右，深度优先（旧式类）。新式类**super()**可以动态的改变解析顺序。为防止`菱形的继承`(多个父类有共同的祖先类)，每个祖先类只调用一次。	  
+子类也可能覆盖父类方法，这时候可以用`BaseClassName.methodname(self, arguments)`来调用父类方法，但注意要import BaseClassName。
+
+Python 有两个用于继承的函数：
+
+**isinstance()** 用于检查实例类型： `isinstance(obj, int)`为`True`只有在 `obj.__class__` 是 **int** 或其它从 **int** 继承的类型。  
+**issubclass()** 用于检查类继承： `issubclass(bool, int)` 为 `True` ，因为 **bool** 是 **int** 的`子类`。但是， `issubclass(unicode, str)` 是 `False` ，因为 **unicode** 不是 **str** 的子类（它们只是共享一个通用祖先类 `basestring` ）。
+
+### 私有变量
+python中严格说没有私有变量。约定以一个下划线开头的命名，会被处理为API的非公开部分。  
+Python 提供了对命名的有限支持，称为 `name mangling`（命名编码） 。任何形如 `__spam` 的标识（前面至少两个下划线，后面***至多一个***，排除了`__init__`之类），被替代为 `_classname__spam` (之后动态加上去的属性不算)
+
+```
+class Mapping:
+    def __init__(self, iterable):
+        self.items_list = []
+        self.__update(iterable)
+
+    def update(self, iterable):
+        for item in iterable:
+            self.items_list.append(item)
+
+    __update = update   # __update私有了，看dir()结果：
+ >>> dir (Mapping)
+ ['_Mapping__update', '__doc__', '__init__', '__module__', 'update']
+
+class MappingSubclass(Mapping):
+
+    def update(self, keys, values):
+       #注意这里覆盖了update方法，但是，不影响__update这个方法哦
+       #也就是不影响父类的__init__方法的调用
+        for item in zip(keys, values):
+            self.items_list.append(item)
+            
+```
+>>> 要注意的是代码传入 exec ， eval() 或 execfile() 时不考虑所调用的类的类名，视其为当前类，这类似于 global 语句的效应，已经按字节编译的部分也有同样的限制。这也同样作用于 getattr() ， setattr() 和 delattr() ，像直接引用 `__dict__` 一样。
+
+### addtional
+实例方法对象也有属性：`m.im_self` 是一个实例`方法`所属的`instance`，而 `m.im_func` 是这个方法对应的`函数`对象(注意这个不是方法！)。  
+python的动态性让这些可以很随意实现，比如一个"结构体"：
+
+```
+class Employee:
+    pass
+
+john = Employee() # Create an empty employee record
+
+# Fill the fields of the record
+john.name = 'John Doe'
+john.dept = 'computer lab'
+john.salary = 1000
+```
+
