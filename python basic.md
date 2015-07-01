@@ -340,6 +340,15 @@ try:
 	raise Exception,('xx','yy') #更常用的写法
 	raise IOError,('a', 'b', 'c', 'd')	#伪造一个IOError
 ```
+**更新**：异常也是类，在类一章里：
+
+	raise Class, instance
+	
+	raise instance
+第二种方法相当于:
+
+	raise instance.__class__, instance
+猜测`raise Exception,('xx','yy') `这种写法自动把后面的参数初始化为一个Exception的instance，相当于第二种方法了。
 
 4. 用户定义异常		
 
@@ -436,7 +445,7 @@ class C:
 每个值都是对象，因此都有一个类。用`type(object)`查看object的类型，或者用`object.__class__`。  
 ### 继承
 
-	class DerivedClassName(modname.BaseClassName):
+	class DerivedClassName(modname.BaseClassName, superC):
 
 如果在类中找不到请求调用的属性，就搜索基类。如果基类是由别的类派生而来，这个规则会递归的应用上去。父类搜索路径是从左到右，深度优先（旧式类）。新式类**super()**可以动态的改变解析顺序。为防止`菱形的继承`(多个父类有共同的祖先类)，每个祖先类只调用一次。	  
 子类也可能覆盖父类方法，这时候可以用`BaseClassName.methodname(self, arguments)`来调用父类方法，但注意要import BaseClassName。
@@ -490,4 +499,23 @@ john.name = 'John Doe'
 john.dept = 'computer lab'
 john.salary = 1000
 ```
+### 迭代器
+我们注意到类似`for item in [1,2,3]:`这类的写法，原理是`for`调用`iter()`函数作用在列表上,`iter()`方法返回一个定义了`next()`方法的迭代器对象，可用next()逐个访问元素，没有元素时，抛出`StopIteration`异常通知`for`循环结束：
 
+```
+>>> s
+'abcdeft'
+>>> for char in s:
+...     print char,
+... 
+a b c d e f t
+>>> iterator = iter(s)
+>>> while True:
+...     print iterator.next(),
+... 
+a b c d e f t
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+StopIteration
+```
+w
