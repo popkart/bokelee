@@ -518,4 +518,21 @@ Traceback (most recent call last):
   File "<stdin>", line 2, in <module>
 StopIteration
 ```
-w
+我们来创造一个可迭代的对象，只需：定义一个`__iter__()`方法，使其返回一个有next()方法的对象。如果这个类已经定义了`next()`，`__iter__()`方法只需返回这个类的对象即可。
+
+```
+class Reverse:
+    """Iterator for looping over a sequence backwards."""
+    def __init__(self, data):
+        self.data = data
+        self.index = len(data)
+    def __iter__(self):
+        return self
+    def next(self):
+        if self.index == 0:
+            raise StopIteration
+        self.index = self.index - 1
+        return self.data[self.index]
+```
+### Generator
+what？
