@@ -1,4 +1,9 @@
-# Python
+# Python Basic Note
+---
+python的几个在线文档：  
+[Python Cookbook](http://www.pythondoc.com/python-cookbook/index.html)  （中文）
+[Python tutorial 2.7.9 ](http://www.pythondoc.com/pythontutorial27/index.html) （中文）  
+[python docs](https://docs.python.org/2/index.html) (官网，python安装后自带doc，还能启动一个本地的小型http server来打开这个文档)
 ### function args
 
 #### 1. Common usage
@@ -518,4 +523,239 @@ Traceback (most recent call last):
   File "<stdin>", line 2, in <module>
 StopIteration
 ```
-w
+我们来创造一个可迭代的对象，只需：定义一个`__iter__()`方法，使其返回一个有next()方法的对象。如果这个类已经定义了`next()`，`__iter__()`方法只需返回这个类的对象即可。
+
+```
+class Reverse:
+    """Iterator for looping over a sequence backwards."""
+    def __init__(self, data):
+        self.data = data
+        self.index = len(data)
+    def __iter__(self):
+        return self
+    def next(self):
+        if self.index == 0:
+            raise StopIteration
+        self.index = self.index - 1
+        return self.data[self.index]
+```
+### Generator
+what？
+
+## Python 标准库
+
+`dir(sys)`：看属性、方法。  
+`help(os.getcwd)`：内容会包含`os.getcwd.__doc__`，但还有模块文件路径、等等信息。
+
+### 操作系统接口
+
+#### `os`操作系统交互函数。help去。
+```
+>>> import os
+>>> os.getcwd()      # Return the current working directory
+'C:\\Python27'
+>>> os.chdir('/server/accesslogs')   # Change current working directory
+>>> os.system('mkdir today')   # Run the command mkdir in the system shell
+0
+```
+#### `shutil`：目录和文件管理高级接口。help去。
+
+```
+>>> import shutil
+>>> shutil.copyfile('data.db', 'archive.db')
+>>> shutil.move('/build/executables', 'installdir')
+
+```
+#### `glob`：文件名通配。
+
+```
+>>> import glob
+>>> glob.glob('*.py')
+['primes.py', 'random.py', 'quote.py']
+```
+#### `sys`：命令行接口相关交互。
+
+```
+>>> import sys
+>>> print sys.argv
+['demo.py', 'one', 'two', 'three']
+sys.stderr.write('Warning, log file not found \n')
+sys.exit()
+```
+处理命令行参数的还是`getopt`和`argparse`模块。
+
+#### `re`正则匹配。
+
+```
+>> import re
+>>> re.findall(r'\bf[a-z]*', 'which foot or hand fell fastest')
+['foot', 'fell', 'fastest']  #把\b吃了？
+>>> re.sub(r'(\b[a-z]+) \1', r'\1', 'cat in the the hat')
+'cat in the hat'
+>>> help(re.sub)
+sub(pattern, repl, string, count=0, flags=0)
+    Return the string obtained by replacing the leftmost
+    non-overlapping occurrences of the pattern in string by the
+    replacement repl.  repl can be either a string or a callable;
+    if a string, backslash escapes in it are processed.  If it is
+    a callable, it's passed the match object and must return
+    a replacement string to be used.
+```
+字符串自带方法：
+
+	>>> 'tea for too'.replace('too', 'two')
+	'tea for two'
+	dir(str)
+	....(我觉得str的方法它都能用)
+
+#### `math`，`random`  模块
+为浮点运算提供了对底层 C 函数库的访问。
+
+	>>> import math
+    >>> math.cos(math.pi / 4.0)
+    0.70710678118654757
+    >>> math.log(1024, 2)
+    10.0
+
+`random` 提供了生成随机数的工具::
+
+    >>> import random
+    >>> random.choice(['apple', 'pear', 'banana'])
+    'apple'
+    >>> random.sample(xrange(100), 10)   # sampling without replacement
+    [30, 83, 16, 4, 8, 81, 41, 50, 18, 33]
+    >>> random.random()    # random float
+    0.17970987693706186
+    >>> random.randrange(6)    # random integer chosen from range(6)
+    4
+
+#### `unittest` 在一个独立的文件里提供一个更全面的单元测试
+
+```
+#averave()等函数已经在另一个文件里写好了，这里测试
+import unittest
+
+class TestStatisticalFunctions(unittest.TestCase):
+
+    def test_average(self):
+        self.assertEqual(average([20, 30, 70]), 40.0)
+        self.assertEqual(round(average([1, 5, 7]), 1), 4.3)
+        self.assertRaises(ZeroDivisionError, average, [])
+        self.assertRaises(TypeError, average, 20, 30, 70)
+
+unittest.main() # Calling from the command line invokes all tests
+```
+
+#### `timeit` 性能度量工具
+
+```
+>>> from timeit import Timer
+>>> Timer('t=a; a=b; b=t', 'a=1; b=2').timeit()
+0.57535828626024577
+>>> Timer('a,b = b,a', 'a=1; b=2').timeit()
+0.54962537085770791
+```
+
+#### `datetime` 对日期时间的格式化等，支持时区
+
+```
+>>> # dates are easily constructed and formatted
+>>> from datetime import date
+>>> now = date.today()
+>>> now
+datetime.date(2003, 12, 2)
+>>> now.strftime("%m-%d-%y. %d %b %Y is a %A on the %d day of %B.")
+'12-02-03. 02 Dec 2003 is a Tuesday on the 02 day of December.'
+
+>>> # dates support calendar arithmetic
+>>> birthday = date(1964, 7, 31)
+>>> age = now - birthday
+>>> age.days
+14368
+```
+#### 数据压缩 `zlib`，`gzip`，`bz2`，`zipfile` and `tarfile`
+
+```
+>>> import zlib
+>>> s = b'witch which has which witches wrist watch'
+>>> len(s)
+41
+>>> t = zlib.compress(s)
+>>> len(t)
+37
+>>> zlib.decompress(t)
+b'witch which has which witches wrist watch'
+>>> zlib.crc32(s)
+226805979
+```
+#### python丰富的库
+* `xmlrpc.client` 和 `xmlrpc.server` 模块让远程过程调用变得轻而易举。尽管模块有这样的名字，用户无需拥有XML的知识或处理XML。
+
+* `email` 包是一个管理邮件信息的库，包括MIME和其它基于 RFC2822 的信息文档。不同于实际发送和接收信息的 `smtplib` 和 `poplib` 模块，`email` 包包含一个构造或解析复杂消息结构(包括附件)及实现互联网编码和头协议的完整工具集。
+
+* `xml.dom` 和 `xml.sax` 包为流行的信息交换格式提供了强大的支持。同样，`csv`  模块支持在通用数据库格式中直接读写。综合起来，这些模块和包大大简化了 Python 应用程序和其它工具之间的数据交换。
+
+* 国际化由 `gettext`， `locale` 和 `codecs` 包支持。
+
+#### 美化输出
+* `repr`，展现list等内部结构。
+* `pprint`，定长换行等美化输出lsit等，
+* `textwrap`，定长输出文本等，
+* `locale`，格式输出本地化内容包括数字带分位逗号等、货币格式化输出等。
+
+#### `string`的模板类`Templete`
+格式使用 `$`为开头的 Python 合法标识(数字、字母和下划线)作为`占位符`。占位符外面的大括号使它可以和其它的字符不加空格混在一起。$$ 创建一个单独的 $:
+
+```
+>>> from string import Template
+>>> t = Template('${village}folk send $$10 to $cause.')
+>>> t.substitute(village='Nottingham', cause='the ditch fund')
+'Nottinghamfolk send $10 to the ditch fund.'
+```
+#### `struct`模块 解析二进制数据
+这个帮你封装了二进制文件读取，可以一下读入多个数值等（一个结构体，struct)。  
+`struct` 模块提供了 `pack()` 和 `unpack()` 函数来处理二进制数据和无符号数之间的转换。  
+压缩码 `H` 和 `I` 分别表示**2**和**4**字节无符号数字，`<` 表明它们都是标准大小并且按照 `little-endian` 字节排序。摘录struct的部分help：
+
+```
+The optional first format char indicates byte order, size and alignment:
+      @: native order, size & alignment (default)
+      =: native order, std. size & alignment
+      <: little-endian, std. size & alignment
+      >: big-endian, std. size & alignment
+      !: same as >
+
+    The remaining chars indicate types of args and must match exactly;
+    these can be preceded by a decimal repeat count:
+      x: pad byte (no data); c:char; b:signed byte; B:unsigned byte;
+      ?: _Bool (requires C99; if not available, char is used instead)
+      h:short; H:unsigned short; i:int; I:unsigned int;
+      l:long; L:unsigned long; f:float; d:double.
+      
+```
+
+下面的示例展示了对一个`zip文件`的头文件解析过程：
+
+
+```
+import struct
+
+#打开一个zip文件并读入所有数据到data
+with open('myfile.zip', 'rb') as f:
+    data = f.read()
+
+start = 0
+for i in range(3):    # 解析zip文件所压缩的前3个文件头
+    start += 14	#跳到第15个字节处
+    fields = struct.unpack('<IIIHH', data[start:start+16]) #按照IIIHH解析[15,30]字节的数据
+    crc32, comp_size, uncomp_size, filenamesize, extra_size = fields	#
+
+    start += 16	#向前跳16字节
+    filename = data[start:start+filenamesize]	#读filename
+    start += filenamesize
+    extra = data[start:start+extra_size]	#读extra信息
+    print filename, hex(crc32), comp_size, uncomp_size
+
+    start += extra_size + comp_size     # 跳到下一个文件头
+    
+```
