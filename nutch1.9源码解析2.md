@@ -132,3 +132,50 @@ MergeJob前面的Map和UPdateDB一样，后面的reduce不同。Reducer类注释
 
 ### 相关数据结构
 
+## InvertLinks
+org.apache.nutch.crawl.LinkDb.
+
+### 脚本调用方法
+
+```
+
+
+```
+
+
+### 执行流程
+
+ 
+ CrawlDb.install(job, crawlDb); //Rename crawldb/current to crawldb/old,crawldb/random.nextInt to crawldb/current
+### 执行子流程
+#### CrawlDbFilter.map
+规范化URL、过滤URL。输出<url, CrawlDatum>。
+#### CrawlDbReducer.reduce
+
+
+
+### 相关数据结构
+
+## SolrIndex
+org.apache.nutch.indexer.IndexingJob.
+
+### 脚本调用方法
+
+```
+Usage: Indexer <crawldb> [-linkdb <linkdb>] [-params k1=v1&k2=v2...] (<segment> ... | -dir <segments>) [-noCommit] [-deleteGone] [-filter] [-normalize]
+
+```
+
+
+### 执行流程
+
+ 
+ CrawlDb.install(job, crawlDb); //Rename crawldb/current to crawldb/old,crawldb/random.nextInt to crawldb/current
+### 执行子流程
+#### CrawlDbFilter.map
+规范化URL、过滤URL。输出<url, CrawlDatum>。
+#### CrawlDbReducer.reduce
+
+
+
+### 相关数据结构
