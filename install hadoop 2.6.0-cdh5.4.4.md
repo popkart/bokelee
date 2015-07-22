@@ -20,7 +20,7 @@
 1. 在**26-30**上分别执行 `ssh-keygen -t rsa` 生成各自的秘钥。 
 2. 用 `ssh-copy-id n26` 把各自公钥拷贝到26上的**authorized-keys**里。
 3. 在26上分别执行`rsync  -vzrtopgu   --progress .ssh/authorized_keys hadoop@n29:/home/hadoop/.ssh/authorized_keys` 把**authorized_keys**（它里面现在有26-30的公钥）拷贝到27-30上。
-4. 在26上分别执行 `rsync  -vzrtopgu   --progress known_hosts hadoop@n29:/home/hadoop/.sshown_hosts` 把known_hosts拷贝到27-30，至此ssh全部打通。  
+4. 在26上分别执行 `rsync  -vzrtopgu   --progress known_hosts hadoop@n29:/home/hadoop/.ssh/known_hosts` 把known_hosts拷贝到27-30，至此ssh全部打通。  
 
 这里出现了一个问题：known_hosts里的所有主机第二个字段的串串都一样！按道理这个应该是主机的公钥，为什么这个文件里的这个都一样？是虚拟主机的原因吧？连接几个主机的RSA key fingerprint都是一样的...[参考这里-stackoverflow](http://security.stackexchange.com/questions/20706/what-is-the-difference-between-authorized-key-and-known-host-file-for-ssh)   `Much like how the authorized_keys file is used to authenticate users the known_hosts file is used to authenticate serversWhenever SSH is configured on a new server it always generates a public and private key for the server, just like you did for your user. Every time you connect to an SSH server it presents its private key in order to prove its identity. If you do not have its public key, then your computer will ask for it and add it into the known_hosts file. If you have the key, and it matches, then you connect straight away.`。但是依然没说明白为什么known_hosts不同主机第二个字段的串串相同的问题）。
 ### 防火墙

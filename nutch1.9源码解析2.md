@@ -133,24 +133,48 @@ MergeJob前面的Map和UPdateDB一样，后面的reduce不同。Reducer类注释
 ### 相关数据结构
 
 ## InvertLinks
-org.apache.nutch.crawl.LinkDb.
+org.apache.nutch.crawl.LinkDb.  
+维护一个反转链接的Map，列出每一个URL的入链（inlinks）。
 
 ### 脚本调用方法
 
-```
-
 
 ```
+Usage: LinkDb <linkdb> (-dir <segmentsDir> | <seg1> <seg2> ...) [-force] [-noNormalize] [-noFilter]
+	linkdb	output LinkDb to create or update
+	-dir segmentsDir	parent directory of several segments, OR
+	seg1 seg2 ...	 list of segment directories
+	-force	force update even if LinkDb appears to be locked (CAUTION advised)
+	-noNormalize	don't normalize link URLs
+	-noFilter	don't apply URLFilters to link URLs
+
+```
+操作对象是日期命名的segment文件夹，或者是其父文件夹`segments文件夹`（`-dir`参数）。
 
 
 ### 执行流程
+1. Invert
+DbLinkJob<LinkDb.map, LinkDbMerger.combine, LinkDbMerger.reduce, <SequenceFileInputformat,MapFileOutputFormat>, Input:segment1,2.../parse_data, Output:linkdb-randomInt, Output<Text, Inlinks>,mapred.output.compress=true>。  
+2. Try to Merge
+Dblink-Merge-job<LinkDbFilter.map, LinkDbMerger.reduce, <SequenceFileInputformat,MapFileOutputFormat>, Input:linkdb-randomInt,Linkdb/current, Output:linkdb-merge-randomInt, Output<Text, Inlinks>,mapred.output.compress=true>
+3. Install LinkDb
+把第二步的output目录rename为Linkdb/current，原current目录rename为old，并删掉。
+
+
+有一个小疑问：这一句的`newLinkDb`究竟是哪里？这是一个相对路径。
+``` 
+Path newLinkDb =
+      new Path("linkdb-" +
+               Integer.toString(new Random().nextInt(Integer.MAX_VALUE)));
+```
+
 
  
- CrawlDb.install(job, crawlDb); //Rename crawldb/current to crawldb/old,crawldb/random.nextInt to crawldb/current
 ### 执行子流程
-#### CrawlDbFilter.map
-规范化URL、过滤URL。输出<url, CrawlDatum>。
-#### CrawlDbReducer.reduce
+#### LinkDb.map
+规范化、过滤FromURL，然后针对每一个析出的OutLink，规范化、过滤，然后取出OutLink的anchor，`new Inlink(fromUrl, anchor)`，把这个Inlink加入Inlinks（它里面有个HashSet可以装多个Inlink，这里只装了一个），输出<OutLink, Inlinks> 。注意在处理OutLink的时候有个参数`db.ignore.internal.links`，如果为true，忽略`和fromUrl的host相同的OutLinks`
+`。
+#### LinkDbMerger.reduce
 
 
 
