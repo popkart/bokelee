@@ -175,8 +175,10 @@ Path newLinkDb =
 规范化、过滤FromURL，然后针对每一个析出的OutLink，规范化、过滤，然后取出OutLink的anchor，`new Inlink(fromUrl, anchor)`，把这个Inlink加入Inlinks（它里面有个HashSet可以装多个Inlink，这里只装了一个），输出<OutLink, Inlinks> 。注意在处理OutLink的时候有个参数`db.ignore.internal.links`，如果为true，忽略`和fromUrl的host相同的OutLinks`
 `。
 #### LinkDbMerger.reduce
+把上一步的输出的同一个OutLink的InLinks，汇集为一个InLinks并输出 <OutLink, Inlinks>，这里有个参数`db.max.inlinks`指定了一个OutLink的最大入度（InLinks的最大size）。
 
-
+#### LinkDbFilter.map
+对<OutLink,Inlinks> 里的OutLink和Inlink进行规范化、过滤，并输出。
 
 ### 相关数据结构
 
