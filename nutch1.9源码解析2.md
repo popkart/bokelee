@@ -191,17 +191,115 @@ org.apache.nutch.indexer.IndexingJob.
 Usage: Indexer <crawldb> [-linkdb <linkdb>] [-params k1=v1&k2=v2...] (<segment> ... | -dir <segments>) [-noCommit] [-deleteGone] [-filter] [-normalize]
 
 ```
-
+通用Indexer，依赖于实现了IndexWriter接口的插件。
 
 ### 执行流程
+1. IndexerJob\<IndexerMapReduce.map, IndexerMapReduce.reduce, <SequenceFileInputformat,IndexerOutputFormat>, Input:segment/crawl_fetch,segement/crawl_parse,segement/parse_text,segement/parse_data,crawldb/current,\[linkdb/current\]Output:tmp_randomInt\>.    
+注意这里的Input是所有加入的segments目录。
+2. 如果需要commit，则IndexWriter.commit()
+3. delete outputdir.
 
- 
- CrawlDb.install(job, crawlDb); //Rename crawldb/current to crawldb/old,crawldb/random.nextInt to crawldb/current
+
 ### 执行子流程
-#### CrawlDbFilter.map
-规范化URL、过滤URL。输出<url, CrawlDatum>。
-#### CrawlDbReducer.reduce
+#### IndexerMapReduce.map
+过滤下URL，输出<Text(URL), NutchWritable(value)>.
 
+#### IndexerMapReduce.reduce
+对于每个URL，把能得到的数据都提取出来（InLinks，content，parseData，等等），在这个过程中对CrawlDatum的各种状态做了判断，对于某些状态的URL我们不做索引（比如Fetch失败的状态等），Nutch状态贯穿整个Nutch处理过程，是各模块处理的条件和依据。
 
+```
+if (value instanceof Inlinks) {
+        inlinks = (Inlinks)value;
+      } else if (value instanceof CrawlDatum) {
+        final CrawlDatum datum = (CrawlDatum)value;
+        if (CrawlDatum.hasDbStatus(datum)) {
+          dbDatum = datum;
+        }
+        ......
+```
 
+新建一个`NutchDocument doc`，添加固有字段：
+
+```
+doc.add("id", key.toString());
+doc.add("segment", metadata.get(Nutch.SEGMENT_NAME_KEY));
+doc.add("digest", metadata.get(Nutch.SIGNATURE_KEY));//used by dedup
+```
+
+然后调用indexer插件增强此doc：
+
+	doc = this.filters.filter(doc, parse, key, fetchDatum, inlinks);
+调用评分插件评个分：
+
+	boost = this.scfilters.indexerScore(key, doc, dbDatum,
+              fetchDatum, parse, inlinks, boost);
+    doc.add("boost", Float.toString(boost));
+
+这样子输出：
+
+    NutchIndexAction action = new NutchIndexAction(doc, NutchIndexAction.ADD);
+    output.collect(key, action);
+注意输出的value，包含了一个添加动作。上面如果遇到删除标记，还有删除动作：
+
+	NutchIndexAction action = new NutchIndexAction(null,  
+	    	NutchIndexAction.DELETE);
+事实上这个Reduce并没有输出到HDFS文件，因为重写的IndexerOutPutFormat。	    	
 ### 相关数据结构
+#### IndexerOutputFormat
+在reduce之后的OutPut环节上，自定义了`RecordWriter`，在写Record的时候进行写Solr操作：
+
+```
+// 重写了RecordWriter的write方法，只有增加和删除2种操作：
+
+ public void write(Text key, NutchIndexAction indexAction)
+                    throws IOException {
+                if (indexAction.action == NutchIndexAction.ADD) {
+                //具体的write操作要看IndexWriter的插件，插件示例见下节
+                    writers.write(indexAction.doc);
+                } else if (indexAction.action == NutchIndexAction.DELETE) {
+                    writers.delete(key.toString());
+                }
+            }
+
+```
+
+#### IndexWriter
+上述MR结束后，结果写入临时目录，然后再调用IndexWriters插件们来commit。Nutch提供了3个默认插件，依次调用配置的插件。
+![IndexWriter插件类](img/indexerWriter.png)
+一次把所有reducers的结果全commit了：
+
+```
+IndexWriters writers = new IndexWriters(getConf());
+          if (!noCommit) {
+                writers.open(job,"commit");
+                writers.commit();
+            }
+```
+
+我们以SolrIndexWriter为例：  
+IndexerWriter的`open()`方法:
+
+        SolrServer server = SolrUtils.getCommonsHttpSolrServer(job);
+        init(server, job);//设置一些参数，如batchsize，solrMapping等
+`write()`方法：
+ 
+ ```
+ public void write(NutchDocument doc) throws IOException {
+        final SolrInputDocument inputDoc = new SolrInputDocument();
+        for (final Entry<String, NutchField> e : doc) {
+            //从NutchDocument填充好inputDoc
+            ......
+            }
+        //把inputDoc加入类变量inputDocs里，如果inputDocs的size达到batchsize,
+        //则提交
+        if (inputDocs.size() + numDeletes >= batchSize) {
+            UpdateRequest req = new UpdateRequest();
+            req.add(inputDocs);
+            req.setParams(params);
+            req.process(solr); 
+            inputDocs.clear();
+            }
+```
+这里要注意下`Hadoop中RecordWriter`的生命周期和作用范围。
+     
+
