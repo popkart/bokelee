@@ -154,7 +154,7 @@ ___
 	效果：
 	这个[我是通过引用来的][idx]
 
-[idx]:http://www.baidu.com "alter2"
+[idx]: http://www.baidu.com "alter2"
 
 ### 强调
 *和_包围住文本，一个转化为"<em></em>"，两个转化为“<strong></strong>”,三个是斜体＋黑体。
