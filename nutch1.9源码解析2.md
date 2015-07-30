@@ -301,5 +301,45 @@ IndexerWriter的`open()`方法:
             }
 ```
 这里要注意下`Hadoop中RecordWriter`的生命周期和作用范围。
-     
+ 
+ 
+ ## CleanJob
+org.apache.nutch.indexer.CleaningJob.  
+The class scans CrawlDB looking for entries with status DB_GONE (404) or DB_DUPLICATE and sends delete requests to indexers for those documents.  
+我认为这一步在SolrIndex中可以做，见：
 
+
+```
+// Whether to delete GONE or REDIRECTS
+    if (delete && fetchDatum != null && dbDatum != null) {    
+      if (fetchDatum.getStatus() == CrawlDatum.STATUS_FETCH_GONE || dbDatum.getStatus() == CrawlDatum.STATUS_DB_GONE) {
+        reporter.incrCounter("IndexerStatus", "Documents deleted", 1);
+
+        NutchIndexAction action = new NutchIndexAction(null, NutchIndexAction.DELETE);
+        output.collect(key, action);
+        return;
+      }
+```
+只是那个`delete(indexer.delete)`默认是**false**。
+
+
+### 脚本调用方法
+
+```
+Usage: CleaningJob <crawldb> [-noCommit]
+
+```
+必选参数只有一个crawldb，但是需要系统变量指定solr的URL。
+
+### 执行流程   
+
+CleaningJob\<DBFilter.map, DeleteReducer.reduce, input:crawldb.current, \<sequenceFileInputFormat,NullOutPutFormat\>\>
+
+### 执行子流程
+#### DBFilter.map
+只过滤出	`getStatus()==STATUS_DB_GONE||STATUS_DB_DUPLICATE`的URL，output\<STATUS_DB_GONE,URL\>。  
+#### DeleteReducer.reduce
+只有一个key，直接调用`writers.delete(value.toString());` 删除。
+
+## 结束
+以上Nutch源码解析概览了1.9版本`crawl`流程涉及到的所有过程。总体的感觉是，CrawlDatum的状态很重要，一个URL的生存周期里这些状态给他们带来了不同的处理逻辑。随着爬取量的增加，crawldb、linkdb的大小都在不断增加，每次Inject或者需要读取这些文件夹时都会花费很多处理时间，这是一个要解决的问题。Nutch2版本里似乎是把这些内容存到其他backend而不是文件里，HBase是一个不错的存储方案，列式数据库的特性天生适合URL+URL版本、属性这类存储，是为爬虫搜索引擎而生。
