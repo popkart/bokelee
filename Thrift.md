@@ -105,7 +105,7 @@ TH_ProxyEntity getProxy(1:string host)
 
 * S1:TSimpleServer(阻塞IO，一般测试用)
 * S2:TThreadPoolServer(阻塞IO，线程池模式，和S1通道什么都一样，创建Server时不一样)
-* S3:TNonblockingServer(非阻塞IO)
+* S3:非阻塞IO，TNonblockingServer,TThreadedSelectorServer
 * S4:THsHaServer(半同步半异步模式，和S3其他地方都一样，创建Server时不一样，S3、S4通道需要指定TFramedTransport)
 
 * C1:TTransport为TServerSocket的，能连接S1、S2
