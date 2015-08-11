@@ -70,14 +70,14 @@ will iterate over its elements in the order "a", "b", "c", "d".
 | `SortedSet`/`NavigableSet` | JDK           | <a href='http://google.github.io/guava/releases/snapshot/api/docs/com/google/common/collect/ImmutableSortedSet.html'><code>ImmutableSortedSet</code></a> |
 | `Map`     | JDK           | <a href='http://google.github.io/guava/releases/snapshot/api/docs/com/google/common/collect/ImmutableMap.html'><code>ImmutableMap</code></a> |
 | `SortedMap` | JDK           | <a href='http://google.github.io/guava/releases/snapshot/api/docs/com/google/common/collect/ImmutableSortedMap.html'><code>ImmutableSortedMap</code></a> |
-| [[Multiset|NewCollectionTypesExplained#multiset]] | Guava         | <a href='http://google.github.io/guava/releases/snapshot/api/docs/com/google/common/collect/ImmutableMultiset.html'><code>ImmutableMultiset</code></a> |
+| [[Multiset]] | Guava         | <a href='http://google.github.io/guava/releases/snapshot/api/docs/com/google/common/collect/ImmutableMultiset.html'><code>ImmutableMultiset</code></a> |
 | `SortedMultiset` | Guava         | <a href='http://google.github.io/guava/releases/12.0/api/docs/com/google/common/collect/ImmutableSortedMultiset.html'><code>ImmutableSortedMultiset</code></a> |
-| [[Multimap|NewCollectionTypesExplained#multimap]] | Guava         | <a href='http://google.github.io/guava/releases/snapshot/api/docs/com/google/common/collect/ImmutableMultimap.html'><code>ImmutableMultimap</code></a> |
+| [[Multimap]] | Guava         | <a href='http://google.github.io/guava/releases/snapshot/api/docs/com/google/common/collect/ImmutableMultimap.html'><code>ImmutableMultimap</code></a> |
 | `ListMultimap` | Guava         | <a href='http://google.github.io/guava/releases/snapshot/api/docs/com/google/common/collect/ImmutableListMultimap.html'><code>ImmutableListMultimap</code></a> |
 | `SetMultimap` | Guava         | <a href='http://google.github.io/guava/releases/snapshot/api/docs/com/google/common/collect/ImmutableSetMultimap.html'><code>ImmutableSetMultimap</code></a> |
-| [[BiMap|NewCollectionTypesExplained#bimap]] | Guava         | <a href='http://google.github.io/guava/releases/snapshot/api/docs/com/google/common/collect/ImmutableBiMap.html'><code>ImmutableBiMap</code></a> |
-| [[ClassToInstanceMap|NewCollectionTypesExplained#classtoinstancemap]] | Guava         | <a href='http://google.github.io/guava/releases/snapshot/api/docs/com/google/common/collect/ImmutableClassToInstanceMap.html'><code>ImmutableClassToInstanceMap</code></a> |
-| [[Table|NewCollectionTypesExplained#table]] | Guava         | <a href='http://google.github.io/guava/releases/snapshot/api/docs/com/google/common/collect/ImmutableTable.html'><code>ImmutableTable</code></a> |
+| [[BiMap]] | Guava         | <a href='http://google.github.io/guava/releases/snapshot/api/docs/com/google/common/collect/ImmutableBiMap.html'><code>ImmutableBiMap</code></a> |
+| [[ClassToInstanceMap]] | Guava         | <a href='http://google.github.io/guava/releases/snapshot/api/docs/com/google/common/collect/ImmutableClassToInstanceMap.html'><code>ImmutableClassToInstanceMap</code></a> |
+| [[Table]] | Guava         | <a href='http://google.github.io/guava/releases/snapshot/api/docs/com/google/common/collect/ImmutableTable.html'><code>ImmutableTable</code></a> |
 
 
 
