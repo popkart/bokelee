@@ -1,0 +1,103 @@
+# Plugins
+插件是Nutch实现定制化可配置裁剪的一个重要机制。
+---
+## 插件列表
+
+* **Protocol**插件：对url进行抓取并返回内容。
+* **URLFilter**插件：对url进行过滤。
+
+
+
+
+
+
+## Protocol插件
+`Protocol`插件是Nutch在`Fetch`阶段用来获取网页的插件，Nutch1.9实现了`ftp、file、http、httpclient`4种。后两个是网页抓取用的。httpclient用的是`Commons HttpClient 3.x`，已经不被支持了。我们先看Protocol插件的源码，最后会增加一个自己的Protocol来抓取网页，使用httpclient4。  
+### 相关数据结构
+
+#### Protocol接口
+
+	/** A retriever of url content.  Implemented by protocol extensions. */
+	public interface Protocol extends Pluggable, Configurable 
+从注释我们可以看出，这个接口功能是获取URL的网页内容，所有Protocol插件扩展都需要实现这个接口。他的一个主要方法：
+
+```
+  /** Returns the Content for a fetchlist entry.
+   */
+  ProtocolOutput getProtocolOutput(Text url, CrawlDatum datum);
+```
+
+把抓取到的内容、状态信息等打包到ProtocolOutput里返回。
+
+#### ProtocolOutPut类
+ProtocolOutPut类里包含2个变量：
+
+
+```
+  private Content content;//抓取到的内容封装
+  private ProtocolStatus status;//状态信息
+```
+
+他们里的东西分别如下：
+
+
+```
+//Content类的成员变量，之前Fetcher阶段说的Content就是它
+  private String url;
+
+  private String base;//该URL由谁衍生来的（如果该URL是generate阶段产生的，则同url变量（看↑那个变量），Fetcher阶段并不仅仅抓取generate生成的URL，也会根据配置继续extract链接抓取，被extract处理的URL如果立马被抓取，则它的base和url变量就不同了）
+
+  private byte[] content;
+
+  private String contentType;
+
+  private Metadata metadata;
+
+  private MimeUtil mimeTypes;
+
+//ProtocolStatus类成员变量，主要包含一个状态码、参数列表
+  private int code;
+  private long lastModified;
+  private String[] args;
+```
+
+#### HttpBase
+Nutch1.9用一个插件`lib-http`封装了http抓取的一些公共内容。包括HTTP异常类，`HttpRobotRulesParser`(Robots文件解析)，以及一个抽象类`HttpBase`来定义一些基础变量、公用 conf设置（如一些http插件和httpclient插件都一样的东西，一些请求头配置，代理）等。  
+ Protocol的主要插件都继承自`HttpBase`，会省很多事。我们之后也决定继承它来获得一些便利。
+
+	public abstract class HttpBase implements Protocol 
+
+该抽象类实现了Protocol的`getProtocolOutput`方法，但是并不打算让它的子类覆盖它，因此它为子类留了一个抽象方法：
+
+```
+  protected abstract Response getResponse(URL url,
+                                          CrawlDatum datum,
+                                          boolean followRedirects)
+    throws ProtocolException, IOException;
+```
+子类只需要覆盖这个方法，返回要求的`Response`让`HttpBase`在`getProtocolOutput`方法里处理即可，`HttpBase`在该方法里，会对`Response`的状态码进行判断，封装`ProtocolOutPut`，交给上层的`Fetcher`处理。  
+而`Response`是一个接口，定义如下：
+
+```
+ /** Returns the URL used to retrieve this response. */
+  public URL getUrl();
+
+  /** Returns the response code. */
+  public int getCode();
+
+  /** Returns the value of a named header. */
+  public String getHeader(String name);
+
+  /** Returns all the headers. */
+  public Metadata getHeaders();
+  
+  /** Returns the full content of the response. */
+  public byte[] getContent();
+```
+
+可以看出是抓取结果的一个包装。  
+下面情况就明朗了，我们的插件**应该**：  
+1. 定义一个`Http`类继承`HttpBase`，因为它有`Protocol`接口(Protocol插件必需)。
+2. `Http`类需要实现`getResponse`方法，该方法抓取url，并返回一个 实现了`Response`接口的对象。
+3. 定义一个实现`Response`接口的类`HttpResponse`。
+
