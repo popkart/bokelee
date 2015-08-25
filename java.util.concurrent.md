@@ -35,13 +35,15 @@ Examine	|element()	|peek()	|not applicable	|not applicable
 
 ```
 public interface Delayed extends Comparable<Delayed> {
-
+//该元素还有多久过期，0或者负数表示已过期，这个方法的返回值
+//是随着时间变化的
  public long getDelay(TimeUnit timeUnit);
 
 }
 ```
 
-这个TimeUnit是个枚举，从`NANOSECONDS`到`DAYS`。注意到`Delayed`接口继承了`Comparable`接口，这意味着元素间可以比较，***可能***DelayQueue借助这一特点，对元素根据expire时间进行有序释放。
+这个TimeUnit是个枚举，从`NANOSECONDS`到`DAYS`。注意到`Delayed`接口继承了`Comparable`接口，这意味着元素间可以比较。因此，元素必须实现`compareTo`和`getDelay`两个方法。DelayQueue借助CompareTo，对元素根据expire时间进行排序，不用遍历整个Queue来检测过期。  
+Delayed接口实现可参考[【java 之DelayQueue实际运用示例】](http://www.cnblogs.com/sunzhenchao/p/3515085.html)中缓存的例子。
 ### LinkedBlockingQueue
 内部实现 linked nodes，FIFO，可以初始化时指定大小，如果不指定就Integer.MAX_VALUE。
 ### PriorityBlockQueue

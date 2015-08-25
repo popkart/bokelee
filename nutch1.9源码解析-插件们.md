@@ -38,7 +38,7 @@ ProtocolOutPut类里包含2个变量：
   private ProtocolStatus status;//状态信息
 ```
 
-他们里的东西分别如下：
+每个变量包含的内容如下：
 
 
 ```
@@ -97,7 +97,10 @@ Nutch1.9用一个插件`lib-http`封装了http抓取的一些公共内容。包�
 
 可以看出是抓取结果的一个包装。  
 下面情况就明朗了，我们的插件**应该**：  
+
 1. 定义一个`Http`类继承`HttpBase`，因为它有`Protocol`接口(Protocol插件必需)。
 2. `Http`类需要实现`getResponse`方法，该方法抓取url，并返回一个 实现了`Response`接口的对象。
 3. 定义一个实现`Response`接口的类`HttpResponse`。
+
+编写插件的时候应该注意，`getProtocolOutput`方法会被每个抓取线程所调用，因此该方法调用的所有方法都要注意**线程安全**问题，尽量避免对线程共享变量进行写操作之类的场景（一个插件可能使用一个HttpClient来进行抓取，这时候由HttpClient来保证线程安全）。
 
