@@ -4,6 +4,7 @@
 ## 插件列表
 
 * **Protocol**插件：对url进行抓取并返回内容。
+* **ScoringFilter**插件：对网页进行评分。
 * **URLFilter**插件：对url进行过滤。
 
 
@@ -103,4 +104,23 @@ Nutch1.9用一个插件`lib-http`封装了http抓取的一些公共内容。包�
 3. 定义一个实现`Response`接口的类`HttpResponse`。
 
 编写插件的时候应该注意，`getProtocolOutput`方法会被每个抓取线程所调用，因此该方法调用的所有方法都要注意**线程安全**问题，尽量避免对线程共享变量进行写操作之类的场景（一个插件可能使用一个HttpClient来进行抓取，这时候由HttpClient来保证线程安全）。
+
+## ScoringFilter插件
+`Scoring`是Nutch对网页进行评分的机制，网页的评分在搜索索引建立和`generate`等阶段均有使用。Nutch通过`ScoringFilter`插件对网页进行评分，并将分数反映在`CrawlDatum`里的score变量上。在Nutch的生命周期多个阶段，该插件都有调用。  
+评分插件依然采用链式的插件调用机制，各评分插件需要实现`ScoringFilter`接口。`ScoringFilters`用来创建和缓存这些评分插件，并提供循环调用评分插件的方法。  
+### Nutch中ScoringFiter插件出现和起作用的地方
+#### Injector
+在`injector`阶段，我们可以在种子文件中配置种子url的初始scores，如果未配置则默认是`1.0f`。
+#### Generator
+`ScoringFilters`插件在`Generator.Selector`类中使用，对每一个url执行Score插件的`generatorSortValue `产生一个排序值，然后从高到低选择前N个url进行抓取。
+
+Nutch中其他使用到`ScoringFilters`插件的地方：
+
+* ./src/java/org/apache/nutch/crawl/CrawlDbReducer.java
+* ./src/java/org/apache/nutch/indexer/IndexerMapReduce.java
+* ./src/java/org/apache/nutch/parse/ParseOutputFormat.java
+* ./src/java/org/apache/nutch/parse/ParserChecker.java
+* ./src/java/org/apache/nutch/parse/ParseSegment.java
+* ./src/java/org/apache/nutch/tools/arc/ArcSegmentCreator.java
+* ./src/java/org/apache/nutch/tools/FreeGenerator.java
 
