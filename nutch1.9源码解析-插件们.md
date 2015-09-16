@@ -135,22 +135,17 @@ Nutch中其他使用到`ScoringFilters`插件的地方：
 接口的方法如下，不同的方法会在Nutch流程不同的地方被调用。
 
 >
->  1. 给Injector注入的种子URL设置初始分数（非0，一般是1）,`Injector`阶段调用。  
+> 1. 给Injector注入的种子URL设置初始分数（非0，一般是1）,`Injector`阶段调用。  
 `public void injectedScore(Text url, CrawlDatum datum) throws ScoringFilterException;`
->
-> 2. 设置一个从已抓取网页中析出的URL的初始分数（可以为0，因为该URL会继承它的入链的部分分数。
+> 2. 设置一个从已抓取网页中析出的URL的初始分数（可以为0，因为该URL会继承它的入链的部分分数。  
   `public void initialScore(Text url, CrawlDatum datum) throws ScoringFilterException;`
->
->  3. 给URL产生一个排序值，以对URL进行排序，取**TopN**进行抓取在`generate`阶段调用。  
+> 3. 给URL产生一个排序值，以对URL进行排序，取**TopN**进行抓取在`generate`阶段调用。  
   `public float generatorSortValue(Text url, CrawlDatum datum, float initSort) throws ScoringFilterException;`
->  
->  4. 把CrawlDatum里有关`scoring`的所有`MetaData`传递给改CrawlDatum的Content，供其对抽取的OUTLINKS评分使用，在解析OUTLINKS之前调用（Fetch阶段）。  
+> 4. 把CrawlDatum里有关`scoring`的所有`MetaData`传递给改CrawlDatum的Content，供其对抽取的OUTLINKS评分使用，在解析OUTLINKS之前调用（Fetch阶段）。  
  `public void passScoreBeforeParsing(Text url, CrawlDatum datum, Content content) throws ScoringFilterException;`
->
->  5. 把该`CrawlDatum`解析阶段产生的`score`信息传递到解析之后的`parse`变量的`MetaData`里去。  
+> 5. 把该`CrawlDatum`解析阶段产生的`score`信息传递到解析之后的`parse`变量的`MetaData`里去。  
   public void passScoreAfterParsing(Text url, Content content, Parse parse) throws ScoringFilterException;
->
->  6. 把`score`信息从当前`CrawlDatum`传递到它的析出链接OUTLINKS中。  
+> 6. 把`score`信息从当前`CrawlDatum`传递到它的析出链接OUTLINKS中。  
    **@param parseData** 该URL的`ParseData`实例，插件可以修改其内部评分并持久化。  
    **@param targets** 插件可以修改其内部评分并持久化。  
    **@param adjust** 一个`CrawlDatum`实例，初始化为null，插件可以调整原始`CrawlDatum`的评分，并返回一个包含调整后的`CrawlDatum`（该方法的return参数，因此这个参数似乎没必要）  
@@ -159,14 +154,12 @@ Nutch中其他使用到`ScoringFilters`插件的地方：
 	public CrawlDatum distributeScoreToOutlinks(Text fromUrl, ParseData parseData,
           Collection<Entry<Text, CrawlDatum>> targets, CrawlDatum adjust,
           int allCount) throws ScoringFilterException;
->
->  7. 在`CrawlDb update`阶段，计算一个`CrawlDatum`的新`score`，计算依据是`old original datum`和`inlinked`，最后放入`the new datum`里，这个datum最后会存入`crawldb`。如果`old original datum`不存在，则用datum里的值和`inlinked`来计算（具体的计算逻辑可以不同，大体就是old和inlink计算出来了新的score，放入datum）。  
+> 7. 在`CrawlDb update`阶段，计算一个`CrawlDatum`的新`score`，计算依据是`old original datum`和`inlinked`，最后放入`the new datum`里，这个datum最后会存入`crawldb`。如果`old original datum`不存在，则用datum里的值和`inlinked`来计算（具体的计算逻辑可以不同，大体就是old和inlink计算出来了新的score，放入datum）。  
    **@param `old original datum`**, 当前`crawldb`里读取到的该URL的`CrawlDatum`，如果是新的URL，那么这个是null。  
    **@param datum `the new datum`**, 从generate阶段产生的`CrawlDatum`，这个datum经历了`generate->fetch->parse`这些阶段，最后它的状态不是db的状态（`datum.status > STATUS_DB_MAX`，是`fetch`的一个状态）存在于segments目录里一个segment下的`crawl_parse`目录。最后会用`old original datum`来更新它，最终将它存入`crawldb`。它的值可能不是有效的，因为有可能其他的segment在该datum所属segment进行`UpdateDB`之前先进行了该操作。  
    **@param inlinked** 当前发现的所有指向该`CrawlDatum`的`CrawlDatum-s`。
   `public void updateDb core(Text url, CrawlDatum old, CrawlDatum datum, List<CrawlDatum> inlinked) throws ScoringFilterException;`
-> 
->   8. 计算`Lucene document boost`，它出现在`Solr indexing job`阶段，在处理完NutchDocument文档最后，给每个文档计算该值。
+> 8. 计算`Lucene document boost`，它出现在`Solr indexing job`阶段，在处理完NutchDocument文档最后，给每个文档计算该值。
    **@param `doc Lucene document`**. 插件可以在交给solr索引前改变它的内容，最后存的是它。
    **@param `dbDatum`** `crawldb`里的该URL的`CrawlDatum`，可以用.
    **@param `fetchDatum`** 同`updateDbScore`里那个`the new datum`。
