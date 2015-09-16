@@ -108,7 +108,7 @@ Nutch1.9用一个插件`lib-http`封装了http抓取的一些公共内容。包�
 ## ScoringFilter插件
 `Scoring`是Nutch对网页进行评分的机制，网页的评分在搜索索引建立和`generate`等阶段均有使用。Nutch通过`ScoringFilter`插件对网页进行评分，并将分数反映在`CrawlDatum`里的score变量上。在Nutch的生命周期多个阶段，该插件都有调用。  
 评分插件依然采用链式的插件调用机制，各评分插件需要实现`ScoringFilter`接口。`ScoringFilters`用来创建和缓存这些评分插件，并提供循环调用评分插件的方法。  
-### Nutch中ScoringFiter插件出现和起作用的地方
+### Nutch中ScoringFilter插件出现和起作用的地方
 #### Injector
 在`injector`阶段，我们可以在种子文件中配置种子url的初始scores，如果未配置则默认是`1.0f`。
 #### Generator
@@ -124,3 +124,91 @@ Nutch中其他使用到`ScoringFilters`插件的地方：
 * ./src/java/org/apache/nutch/tools/arc/ArcSegmentCreator.java
 * ./src/java/org/apache/nutch/tools/FreeGenerator.java
 
+### Nutch中已有的`ScoringFilter`
+
+#### ScoringFilter接口
+ 	A scoring filter will manipulate scoring variables in CrawlDatum and in resulting search indexes. Filters can be chained in a specific order, to provide multi-stage scoring adjustments.
+
+从接口的注释中我们可以看到，评分插件主要影响到`CrawlDatum`中的`scoring`变量，并且在`solr`进行索引时会有用。评分插件可以链式调用。  
+接口的方法如下，不同的方法会在Nutch流程不同的地方被调用。
+
+>
+  1. 给Injector注入的种子URL设置初始分数（非0，一般是1）,`Injector`阶段调用  
+`public void injectedScore(Text url, CrawlDatum datum) throws ScoringFilterException;`
+>
+ 2. 设置一个从已抓取网页中析出的URL的初始分数（可以为0，因为该URL会继承它的入链的部分分数
+  `public void initialScore(Text url, CrawlDatum datum) throws ScoringFilterException;`
+  >
+  3. 给URL产生一个排序值，以对URL进行排序，取**TopN**进行抓取在`generate`阶段调用 
+  `public float generatorSortValue(Text url, CrawlDatum datum, float initSort) throws ScoringFilterException;`
+  4. 把CrawlDatum里有关`scoring`的所有`MetaData`传递给改CrawlDatum的Content，供其对抽取的OUTLINKS评分使用，在解析OUTLINKS之前调用（Fetch阶段）
+  `public void passScoreBeforeParsing(Text url, CrawlDatum datum, Content content) throws ScoringFilterException;`
+  
+  5. 把该`CrawlDatum`解析阶段产生的`score`信息传递到解析之后的`parse`变量的`MetaData`里去
+  public void passScoreAfterParsing(Text url, Content content, Parse parse) throws ScoringFilterException;
+  
+  /**
+   * Distribute score value from the current page to all its outlinked pages.
+   * @param fromUrl url of the source page
+   * @param parseData ParseData instance, which stores relevant score value(s)
+   * in its metadata. NOTE: filters may modify this in-place, all changes will
+   * be persisted.
+   * @param targets &lt;url, CrawlDatum&gt; pairs. NOTE: filters can modify this in-place,
+   * all changes will be persisted.
+   * @param adjust a CrawlDatum instance, initially null, which implementations
+   * may use to pass adjustment values to the original CrawlDatum. When creating
+   * this instance, set its status to {@link CrawlDatum#STATUS_LINKED}.
+   * @param allCount number of all collected outlinks from the source page
+   * @return if needed, implementations may return an instance of CrawlDatum,
+   * with status {@link CrawlDatum#STATUS_LINKED}, which contains adjustments
+   * to be applied to the original CrawlDatum score(s) and metadata. This can
+   * be null if not needed.
+   * @throws ScoringFilterException
+   */
+  public CrawlDatum distributeScoreToOutlinks(Text fromUrl, ParseData parseData, 
+          Collection<Entry<Text, CrawlDatum>> targets, CrawlDatum adjust,
+          int allCount) throws ScoringFilterException;
+
+  /**
+   * This method calculates a new score of CrawlDatum during CrawlDb update, based on the
+   * initial value of the original CrawlDatum, and also score values contributed by
+   * inlinked pages.
+   * @param url url of the page
+   * @param old original datum, with original score. May be null if this is a newly
+   * discovered page. If not null, filters should use score values from this parameter
+   * as the starting values - the <code>datum</code> parameter may contain values that are
+   * no longer valid, if other updates occured between generation and this update.
+   * @param datum the new datum, with the original score saved at the time when
+   * fetchlist was generated. Filters should update this in-place, and it will be saved in
+   * the crawldb.
+   * @param inlinked (partial) list of CrawlDatum-s (with their scores) from
+   * links pointing to this page, found in the current update batch.
+   * @throws ScoringFilterException
+   */
+  public void updateDbScore(Text url, CrawlDatum old, CrawlDatum datum, List<CrawlDatum> inlinked) throws ScoringFilterException;
+ > 
+  /**
+   * This method calculates a Lucene document boost.
+   * @param url url of the page
+   * @param doc Lucene document. NOTE: this already contains all information collected
+   * by indexing filters. Implementations may modify this instance, in order to store/remove
+   * some information.
+   * @param dbDatum current page from CrawlDb. NOTE: changes made to this instance
+   * are not persisted.
+   * @param fetchDatum datum from FetcherOutput (containing among others the fetching status)
+   * @param parse parsing result. NOTE: changes made to this instance are not persisted.
+   * @param inlinks current inlinks from LinkDb. NOTE: changes made to this instance are
+   * not persisted.
+   * @param initScore initial boost value for the Lucene document.
+   * @return boost value for the Lucene document. This value is passed as an argument
+   * to the next scoring filter in chain. NOTE: implementations may also express
+   * other scoring strategies by modifying Lucene document directly.
+   * @throws ScoringFilterException
+   */
+  public float indexerScore(Text url, NutchDocument doc, CrawlDatum dbDatum,
+          CrawlDatum fetchDatum, Parse parse, Inlinks inlinks, float initScore) throws ScoringFilterException;
+}
+
+
+#### `DepthScoringFilter`
+限制URL从初始种子开始计算的层数，如果一个URL的层数**大于等于**默认最大层数或者injector文件里设定的层数，则该URL的所有**OUTLINKS**会被抛掉。使用该插件，会在`CrawlDatum`的`MetaData`里记录该`CrawlDatum`所属的深度`_depth_`和允许的最大深度`_maxdepth_`。
