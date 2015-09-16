@@ -124,7 +124,6 @@ Nutch中其他使用到`ScoringFilters`插件的地方：
 * ./src/java/org/apache/nutch/tools/arc/ArcSegmentCreator.java
 * ./src/java/org/apache/nutch/tools/FreeGenerator.java
 
-### Nutch中已有的`ScoringFilter`
 
 #### ScoringFilter接口
  	A scoring filter will manipulate scoring variables in CrawlDatum and 
@@ -132,7 +131,7 @@ Nutch中其他使用到`ScoringFilters`插件的地方：
 	to provide multi-stage scoring adjustments.
 
 从接口的注释中我们可以看到，评分插件主要影响到`CrawlDatum`中的`scoring`变量，并且在`solr`进行索引时会有用。评分插件可以链式调用。  
-接口的方法如下，不同的方法会在Nutch流程不同的地方被调用。
+接口的方法如下，不同的方法会在Nutch流程不同的地方被调用（至少在下面的过程中被调用，对应方法序号：1inject，2fetch，3generate，4fetch后parse前，5parse后，6parse后，7updatedb，8index）。
 
 >
 > 1. 给Injector注入的种子URL设置初始分数（非0，一般是1）,`Injector`阶段调用。  
@@ -167,6 +166,28 @@ Nutch中其他使用到`ScoringFilters`插件的地方：
    `public float indexerScore(Text url, NutchDocument doc, CrawlDatum dbDatum,
           CrawlDatum fetchDatum, Parse parse, Inlinks inlinks, float initScore) throws ScoringFilterException;`
 
+### Nutch中已有的`ScoringFilter`
+Nutch中已经实现了几个评分插件如下图：  
+![nutch实现的评分插件](img/nutch_sfs.png)
 
 #### `DepthScoringFilter`
-限制URL从初始种子开始计算的层数，如果一个URL的层数**大于等于**默认最大层数或者injector文件里设定的层数，则该URL的所有**OUTLINKS**会被抛掉。使用该插件，会在`CrawlDatum`的`MetaData`里记录该`CrawlDatum`所属的深度`_depth_`和允许的最大深度`_maxdepth_`。
+限制URL从初始种子开始计算的深度，如果一个URL的深度**大于等于**默认最大深度或者Nutch配置文件里设定的允许最大深数（`scoring.depth.max`），则该URL的所有**OUTLINKS**会被抛掉。使用该插件，会在`CrawlDatum`的`MetaData`里记录该`CrawlDatum`所属的深度`_depth_`和允许的最大深度`_maxdepth_`。  
+该插件对`generate`阶段URL排序分数影响：
+	插件处理后分数 = 处理前分数 * (1 + (允许最大深度 - 当前URL深度));//允许最大深度如未指定默认为1000
+其他地方只是对深度的修改，不涉及分数处理。
+
+#### `OPICScoringFilter`-在线网页重要度计算
+This plugin implements a variant of an **Online Page Importance Computation (OPIC) score**//, described in this paper: [【Abiteboul, Serge and Preda, Mihai and Cobena, Gregory (2003), Adaptive On-Line Page Importance Computation】](http://www2003.org/cdrom/papers/refereed/p007/p7-abiteboul.html)   
+
+* `initialScore`   
+初始化score为`0.0`。因为析出的每个URL都有至少一个入链，会继承分数。
+* `generatorSortValue`   
+`排序分数 = CrawlDatum内分数 * 排序初始分数`
+* `updateDbScore(Text url, CrawlDatum old, CrawlDatum datum, List<CrawlDatum> inlinked)`   
+更新datum的分数为，old的分数+（所有inlink的分数总和）
+* `passScoreBeforeParsing(Text url, CrawlDatum datum, Content content)`  
+把datum的分数存入content的Meta信息里: `content.getMetadata().set(Nutch.SCORE_KEY, "" + datum.getScore())`
+* `passScoreAfterParsing(Text url, Content content, Parse parse)`  
+把content里的分数存入parse里: ` parse.getData().getContentMeta().set(Nutch.SCORE_KEY, content.getMetadata().get(Nutch.SCORE_KEY))`
+* **`distributeScoreToOutlinks(Text fromUrl, ParseData parseData, Collection<Entry<Text, CrawlDatum>> targets, CrawlDatum adjust, int allCount)`**  
+
