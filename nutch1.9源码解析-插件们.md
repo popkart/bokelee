@@ -156,7 +156,7 @@ Nutch中其他使用到`ScoringFilters`插件的地方：
 > 7. 在`CrawlDb update`阶段，计算一个`CrawlDatum`的新`score`，计算依据是`old original datum`和`inlinked`，最后放入`the new datum`里，这个datum最后会存入`crawldb`。如果`old original datum`不存在，则用datum里的值和`inlinked`来计算（具体的计算逻辑可以不同，大体就是old和inlink计算出来了新的score，放入datum）。  
    **@param `old original datum`**, 当前`crawldb`里读取到的该URL的`CrawlDatum`，如果是新的URL，那么这个是null。  
    **@param datum `the new datum`**, 从generate阶段产生的`CrawlDatum`，这个datum经历了`generate->fetch->parse`这些阶段，最后它的状态不是db的状态（`datum.status > STATUS_DB_MAX`，是`fetch`的一个状态）存在于segments目录里一个segment下的`crawl_parse`目录。最后会用`old original datum`来更新它，最终将它存入`crawldb`。它的值可能不是有效的，因为有可能其他的segment在该datum所属segment进行`UpdateDB`之前先进行了该操作。  
-   **@param inlinked** 当前发现的所有指向该`CrawlDatum`的`CrawlDatum-s`。  
+   **@param inlinked** 当前批次发现的所有指向该`CrawlDatum`的`CrawlDatum-s`。  
   `public void updateDb core(Text url, CrawlDatum old, CrawlDatum datum, List<CrawlDatum> inlinked) throws ScoringFilterException;`
 > 8. 计算`Lucene document boost`，它出现在`Solr indexing job`阶段，在处理完NutchDocument文档最后，给每个文档计算该值。  
    **@param `doc Lucene document`**. 插件可以在交给solr索引前改变它的内容，最后存的是它。  
@@ -177,17 +177,24 @@ Nutch中已经实现了几个评分插件如下图：
 其他地方只是对深度的修改，不涉及分数处理。
 
 #### `OPICScoringFilter`-在线网页重要度计算
-This plugin implements a variant of an **Online Page Importance Computation (OPIC) score**//, described in this paper: [【Abiteboul, Serge and Preda, Mihai and Cobena, Gregory (2003), Adaptive On-Line Page Importance Computation】](http://www2003.org/cdrom/papers/refereed/p007/p7-abiteboul.html)   
+This plugin implements a variant of an **Online Page Importance Computation (OPIC) score**//, described in this paper: [【Abiteboul, Serge and Preda, Mihai and Cobena, Gregory (2003), Adaptive On-Line Page Importance Computation】](http://www.www2003.org/cdrom/papers/refereed/p007/p7-abiteboul.html)   
+总体思路是，入链越多，分数越高。出链越多，每个出链分配的分数越少。
 
 * `initialScore`   
 初始化score为`0.0`。因为析出的每个URL都有至少一个入链，会继承分数。
 * `generatorSortValue`   
 `排序分数 = CrawlDatum内分数 * 排序初始分数`
 * `updateDbScore(Text url, CrawlDatum old, CrawlDatum datum, List<CrawlDatum> inlinked)`   
-更新datum的分数为，old的分数+（所有inlink的分数总和）
+更新datum的分数为，old的分数+（所有入链的分数总和）
 * `passScoreBeforeParsing(Text url, CrawlDatum datum, Content content)`  
 把datum的分数存入content的Meta信息里: `content.getMetadata().set(Nutch.SCORE_KEY, "" + datum.getScore())`
 * `passScoreAfterParsing(Text url, Content content, Parse parse)`  
 把content里的分数存入parse里: ` parse.getData().getContentMeta().set(Nutch.SCORE_KEY, content.getMetadata().get(Nutch.SCORE_KEY))`
-* **`distributeScoreToOutlinks(Text fromUrl, ParseData parseData, Collection<Entry<Text, CrawlDatum>> targets, CrawlDatum adjust, int allCount)`**  
-
+* **传递分数给出链`distributeScoreToOutlinks(Text fromUrl, ParseData parseData, Collection<Entry<Text, CrawlDatum>> targets, CrawlDatum adjust, int allCount)`**  
+	1. 取得parseData里存储的score。
+	2. score = score/出链个数
+	3. 得出内链（出链host与fromUrl相同）分数和外链（出链host与fromUrl不同）分数，计算公式：
+	`内链分数 = score * 内链分数因子（默认1，可配置）;
+    外链分数 = score * 外链分数因子（默认1，可配置）;`
+	4. 根据内、外链不同分别将targets里的出链`CrawlDatum`设置分数。
+	5. adjust原样返回（未调整），这里原源码注释有疑问，按照论文里的说法，fromUrl在将分数传递给出链后，会丧失自己的分数。
