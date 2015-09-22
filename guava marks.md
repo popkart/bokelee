@@ -50,7 +50,7 @@ Guava has staggering numbers of unit tests: as of July 2012, the guava-tests pac
 **CharMatcher**  
 以往StringUtils对某一类**字符**的做法是，匹配上某个模式，然后对其操作。瓜娃用这个类来简化操作。直接上例子：
 
-```
+```java
 String noControl = CharMatcher.JAVA_ISO_CONTROL.removeFrom(string); // remove control characters
 String theDigits = CharMatcher.DIGIT.retainFrom(string); // only the digits
 String spaced = CharMatcher.WHITESPACE.trimAndCollapseFrom(string, ' ');
@@ -73,7 +73,8 @@ An `ImmutableXXX` collection 可通过下面方法创建:
   * using the `copyOf` method, `ImmutableSet.copyOf(set)`
   * using the `of` method, for example, `ImmutableSet.of("a", "b", "c")` or `ImmutableMap.of("a", 1, "b", 2)`
   * using a `Builder`,
-```
+
+```java
 public static final ImmutableSet<Color> GOOGLE_COLORS =
        ImmutableSet.<Color>builder()//这个语法
            .addAll(WEBSAFE_COLORS)
@@ -133,7 +134,7 @@ java的hash比较简单快速，但是冲突比较高。在一些需要低冲突
 ### Funnel接口
 比如我们添加一个对象`Person`，定义如下：
 
-```
+```java
 class Person {
   final int id;
   final String firstName;
@@ -144,7 +145,7 @@ class Person {
 ```
 我们的`Funnel`需要定义如下：
 
-```
+```java
 Funnel<Person> personFunnel = new Funnel<Person>() {
   @Override
   public void funnel(Person person, PrimitiveSink into) {
@@ -174,7 +175,7 @@ guava由`Funnels`类来提供默认的`Funnel`（int/long/string/byte[]等），
 guava提供了一个内置`BloomFilter`，我们只用指定一个`Funnel`来解析要进行`BloomFilter过滤`的对象即可。You can obtain a fresh [BloomFilter&lt;T&gt;](http://google.github.io/guava/releases/snapshot/api/docs/com/google/common/hash/BloomFilter.html) with <a href='http://google.github.io/guava/releases/snapshot/api/docs/com/google/common/hash/BloomFilter.html#create(com.google.common.hash.Funnel, int, double)'><code>create(Funnel funnel, int expectedInsertions, double falsePositiveProbability)</code></a>, or just accept the default false probability of 3%. `BloomFilter<T>` offers the methods `boolean mightContain(T)` and `void put(T)`。  
 以字符串为例：
 
-```
+```java
 		Funnel<CharSequence> fl = Funnels.stringFunnel(Charsets.UTF_8);
 		//1亿占用100多M内存。1亿根据公式大概需要10亿位，10^9/8≈125M
 		BloomFilter<String> blf = BloomFilter.create(fl, 100000000, 0.01);
