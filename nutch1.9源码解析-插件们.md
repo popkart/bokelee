@@ -232,7 +232,8 @@ Nutch使用了OPIC变种作为默认的URL评分策略，它只设置了一个sc
 
 下面的文档提供了更多的信息：  
 [【Fixing the OPIC algorithm in Nutch】](http://wiki.apache.org/nutch/FixingOpicScoring)    
-<http://dustin.iteye.com/blog/349436>中文章最后提供了一个例子来描述Nutch中的类OPIC评分算法。
+<http://dustin.iteye.com/blog/349436>中文章最后提供了一个例子来描述Nutch中的类OPIC评分算法。  
+[**Nutch OPICScoringFilter插件作者介绍该插件算法的slider**](http://wiki.apache.org/nutch/FixingOpicScoring?action=AttachFile&do=get&target=opic.pdf)
 
 下面是`Nutch1.9 OPICScoringFilter` 实现，抓取顺序、网页重要度均受这个`score`影响。
 
