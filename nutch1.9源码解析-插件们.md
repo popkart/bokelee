@@ -178,7 +178,63 @@ Nutch中已经实现了几个评分插件如下图：
 
 #### `OPICScoringFilter`-在线网页重要度计算
 This plugin implements a variant of an **Online Page Importance Computation (OPIC) score**//, described in this paper: [【Abiteboul, Serge and Preda, Mihai and Cobena, Gregory (2003), Adaptive On-Line Page Importance Computation】](http://www.www2003.org/cdrom/papers/refereed/p007/p7-abiteboul.html)   
-总体思路是，入链越多，分数越高。出链越多，每个出链分配的分数越少。
+OPIC算法的目的是在爬完所有URL的同时，计算出每个URL的分数（重要度）。  
+如上所述`Nutch1.x`的`OPICScoringFilter`实现了上述论文的一个**变体**，下面是上述论文中的OPIC算法，和Nutch中的不同。
+```
+OPIC:
+On-line Page Importance Computation
+//C[i]表示页面i当前的Cash，H[i]表示在计算过程中页面i累计收到的cash的总数(history)。
+//每个URL（页面）都有初始cash，爬取一个URL，该URL的cash被平均分给它的OUTLINKS，
+//然后其cash清零。同时将其H增加cash的数值。最终URL的重要度是其H和最后留存的cash的和之后归一化（反正所有页面的重要度之和是1，咱就不归了）。
+//我们可以看出，一个URL被抓的次数越多，其分出的cash越多，重要度越大（如果出现个环的话，环内自流通。。我说的是可以多次抓取的情况）；
+//如果所有URL只抓一次，一般情况下一个URL的入链越多，其会被分配越多的cash，最后重要度也越大。
+
+
+
+
+for each i let C[i] := 1/n ; //C数组保存了网络中每个URL的当前cash。总和是1
+							//实际中，我们并不知道网络中有多少URL
+							//我们的策略是给初始种子设定cash，网络中只流通这些cash
+							//而非种子URL，cash默认是0
+for each i let H[i] := 0 ;	//H数组保存了网络中每个URL的当前流过的cash（history）
+let G:=0 ;	//当前所有URL的H总数，统计用
+do forever
+begin
+  choose some node i ;//选择种子URL i，进行爬取
+  %% each node is selected
+  %% infinitely often
+
+  H[i] += C[i];//爬取i完成后，URL i的H ，为其当前H加上其cash变量
+				//可以看到只有爬取完后，URL才会有H。对未爬取的URL，H只会是0
+				//OPIC算法的目的是在爬完所有URL的同时，计算出每个URL的重要度
+				//而我们怎么利用它来指导爬取路径呢？我们按照URL持有的cash来排序，也就是
+				//cash多的URL会被优先爬取，正所谓打土豪分田地。
+  %% single disk access per page
+
+  for each child j of i,
+    do C[j] += C[i]/out[i];  //把i的cash，平均分配给其OUTLINKS
+  %% Distribution of cash
+  %% depends on L
+
+  G += C[i];	//统计当前所有URL的H总和。
+  C[i] := 0 ; 	//清零URL i所持有的cash。
+  
+end
+//每一次循环，都可以计算页面的重要度Q[i]=(H[i]+C[i])/(G+1)。
+```
+Nutch使用了OPIC变种作为默认的URL评分策略，它只设置了一个score变量，score大的URL会被优先爬取。  
+因此`Nutch1.x`的OPIC实现与Abiteboul在论文提出的OPIC并不完全相同，具体表现为：
+  1. Nutch中并没有区分C[i]和H[i]，使用score一个变量记录页面累积的h和cash，在分配过程中也是将这个累积的分数全部平均分配给子页面，分配完毕后cash也**并不清零**（因为没有cash这个变量啊。。这个score既是cash又是h，没法清0）。
+  2. Nutch中并没有virtual root page，也就是说叶子页面（即没有outlink的页面）的cash将会丢失（爬完这些页面后，按算法它的cash要被清零，原算法每个页面都指向这个虚拟页面，这个虚拟页面又指向所有页面。因此原算法效果类似于**叶子页面指向其他所有页面**。但它没有，因此它爬完后如果清除cash那么网络中总cash会变少！当然Nutch并没遵循算法，cash也不清零。。）。   
+总之是**这个变种和原算法差别比较大**。如果实现了该论文中算法，则可以按照当前URL的cash多少来指导爬取（论文作者论述了随机、轮询、先抓cash大的网页（贪婪策略）三种爬取策略，得出贪婪策略网页重要度算法收敛最快，还有实验各种数据做证明，因此我们用该方法指导爬取），按照H+C大小评判网页重要度，在索引等的时候用的着。
+
+在`Nutch2.3`版本中OPIC插件是按照原论文算法来的。
+
+下面的文档提供了更多的信息：  
+[【Fixing the OPIC algorithm in Nutch】](http://wiki.apache.org/nutch/FixingOpicScoring)    
+<http://dustin.iteye.com/blog/349436>中文章最后提供了一个例子来描述Nutch中的类OPIC评分算法。
+
+下面是`Nutch1.9 OPICScoringFilter` 实现，抓取顺序、网页重要度均受这个`score`影响。
 
 * `initialScore`   
 初始化score为`0.0`。因为析出的每个URL都有至少一个入链，会继承分数。
@@ -197,4 +253,4 @@ This plugin implements a variant of an **Online Page Importance Computation (OPI
 	`内链分数 = score * 内链分数因子（默认1，可配置）;
     外链分数 = score * 外链分数因子（默认1，可配置）;`
 	4. 根据内、外链不同分别将targets里的出链`CrawlDatum`设置分数。
-	5. adjust原样返回（未调整），这里原源码注释有疑问，按照论文里的说法，fromUrl在将分数传递给出链后，会丧失自己的分数。
+	5. adjust原样返回（未调整）。
