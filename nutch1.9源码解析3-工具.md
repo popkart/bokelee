@@ -121,7 +121,14 @@ This tool takes several segments and **merges their data together**. Only the la
 >
 Optionally, you can apply current URLFilters to remove prohibited URL-s.
 >
-Also, it's possible to **slice the resulting segment** into chunks of **fixed size**.
+Also, it's possible to **slice the resulting segment** into chunks of **fixed size**.  
+
+一个segment里的目录： 
+
+```
+content  crawl_fetch   crawl_generate  
+crawl_parse    parse_data     parse_text
+```
 
 需要注意的点：  
 
@@ -131,7 +138,7 @@ Also, it's possible to **slice the resulting segment** into chunks of **fixed si
 4. 关于索引，因为建立索引（如solr索引）时会写入一个字段segement，因此合并后有新名字的segment将导致索引和segment这点无法对应，需要重新index。
 
 
-
+源码注释如下：
 >
 Important Notes
 Which parts are merged?
@@ -175,19 +182,74 @@ output<Text, MetaWrapper>
 
 ### 执行子流程
 #### SegmentMerger.map
-过滤，输出<URL, MetaWrapper> ，输入也是它，MetaWrapper是ObjectFileInputFormat里生成的，对NutchWritable的包装。
+过滤，输出<URL, MetaWrapper> ，输入也是它，MetaWrapper是ObjectFileInputFormat里生成的，对NutchWritable的包装，比原始的Writable值多封装了一个MetaData，并写入**("part", segmentname)**:
 
+    wrapper.setMeta(SEGMENT_PART_KEY, spString);
+
+
+#### SegmentMerger.reduce
+判别MetaWrapper是何种类别（CrawlDatum? Content? ParseText...），取得该类别latest的对象（根据segmentname，至少保证字母序），然后过滤，分类输出。
 
 
 ## readdb
+对CrawlDb内Url情况进行统计，Dump。
 ### 脚本调用方法
 
+```
+Usage: CrawlDbReader <crawldb> (-stats | -dump <out_dir> | -topN <nnnn> <out_dir> [<min>] | -url <url>)
+	<crawldb>	directory name where crawldb is located
+	-stats [-sort] 	print overall statistics to System.out
+		[-sort]	list status sorted by host
+	-dump <out_dir> [-format normal|csv|crawldb]	dump the whole db to a text file in <out_dir>
+		[-format csv]	dump in Csv format
+		[-format normal]	dump in standard format (default option)
+		[-format crawldb]	dump as CrawlDB
+		[-regex <expr>]	filter records with expression
+		[-retry <num>]	minimum retry count
+		[-status <status>]	filter records by CrawlDatum status
+	-url <url>	print information on <url> to System.out
+	-topN <nnnn> <out_dir> [<min>]	dump top <nnnn> urls sorted by score to <out_dir>
+		[<min>]	skip records with scores below this value.
+			This can significantly improve performance.
+
+```
 
 ### 执行流程
+根据参数，有3个不同的job会被启动。
 
+* processStatJob  
+	统计Job
+* 
+	
+	
+
+	
 
 
 ### 执行子流程
+#### processStatJob
+第一步，统计到tmp文件夹（StatJob）
+
+	//临时文件夹
+    Path tmpFolder = new Path(crawlDb, "stat_tmp" + System.currentTimeMillis());
+	//输入路径：crawldb的current目录
+	FileInputFormat.addInputPath(job, new Path(crawlDb, CrawlDb.CURRENT_NAME));
+    job.setInputFormat(SequenceFileInputFormat.class);
+	//Mapper
+    job.setMapperClass(CrawlDbStatMapper.class);
+    //Combiner
+    job.setCombinerClass(CrawlDbStatCombiner.class);
+    //Reducer
+    job.setReducerClass(CrawlDbStatReducer.class);
+
+	//输出目录：临时目录
+    FileOutputFormat.setOutputPath(job, tmpFolder);
+    job.setOutputFormat(SequenceFileOutputFormat.class);
+    //输出kv：URL, count
+    job.setOutputKeyClass(Text.class);
+    job.setOutputValueClass(LongWritable.class);
+    
+第二步，非分布式，在客户端执行，从临时文件夹读取统计数据，用一个TreeMap来存放统计数据。统计数据包括：最大、最小score、所有URL的score(Map中的key为"scn","scx","sct")，URL总数（"T"），还有各种status（fetched，unfetched...）的统计，各host下URL数统计。完成输出TreeMap，删除临时文件夹。
 
 ### 相关数据结构
 ## readseg
