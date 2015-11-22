@@ -11,8 +11,8 @@
 JVM规范中对该区域规定了2个异常：
 	* StackOverFlowError: 线程请求的栈深度大于虚拟机允许的栈深度。
 	* OOMError：大部分JVM栈都可动态扩展，当扩展时无法申请到足够内存时发生。
-	
-	用`-Xss128k`来限制。
+
+用`-Xss128k`来限制。
 #### Native Method 栈
 与JVM栈作用类似，只是为JVM使用到的本地方法服务。有的虚拟机（如HotSpot）甚至把它与JVM栈合二为一。也会抛SOF和OOM。
 
