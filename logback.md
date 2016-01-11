@@ -52,7 +52,7 @@ logback可以打印**Logger status**，如下。
 12:49:22,093 |-INFO in ch.qos.logback.classic.LoggerContext[default] - Setting up default configuration.
 ```
 
-logback么有找到配置文件，使用了默认配置。注意如果logback出错了也会打印内部状态到控制台。
+logback么有找到配置文件，使用了默认配置。注意如果**logback配置出错了也会打印内部状态**到控制台。
  
 Logback distributions contain complete source code such that you can modify parts of logback library and build your own version of it. 
 
@@ -183,7 +183,8 @@ It is responsibility of the invoked appender to format the logging event. Howeve
 
 6. ***Sending out the LoggingEvent***  
 由Appender把结果发送出去。  
-After the logging event is fully formatted it is sent to its destination by each appender.
+After the logging event is fully formatted it is sent to its destination by each appender.  
+
 Here is a sequence UML diagram to show how everything works. 
 
  ![underTheHoodSequenceDiagram](img/underTheHoodSequence2.gif)
@@ -200,7 +201,98 @@ Layout的formatter和Appender一样都被高度优化过，实际的logging时�
 
 虽然有很多特性，logback始终把性能放在第一位，其次是可靠性。
 
+## Configuration
+logback配置文件加载顺序：
 
+1. logback.groovy
+2. logback-test.xml
+3. logback.xml
+4. 如果上面3个都没有，且JVM has the ServiceLoader (JDK 6 and above) the ServiceLoader will be used to resolve **an implementation of com.qos.logback.classic.spi.Configurator**（前提是得写了这么一个实现了该接口的类，在类中进行配置）. The first implementation found will be used.
+5. 如果没发现这个类，logback就使用一个基本的配置[BasicConfigurator类](http://logback.qos.ch/xref/ch/qos/logback/classic/BasicConfigurator.html)来配置之，直接输出到console。 
+ 
+logback这样安排的一个好处是，如果使用maven，你可以把logba-test.xml放在src/test/resources文件夹下，在调试的时候它会起作用，而在最后打包的时候不会把它打到包里，logback.xml会起作用。Ant也是一样。
+
+### logback打印status messages的另一种方法--配置
+Instead of invoking StatusPrinter programmatically from your code, you can instruct the configuration file to dump status data, even in the absence of errors. To achieve this, you need to **set the debug attribute of the configuration element**, i.e. the top-most element in the configuration file, as shown below. Please note that this debug attribute relates only to the status data. It does not affect logback's configuration otherwise, in particular with respect to logger levels.
+
+```
+<configuration debug="true"> 
+
+······
+</configuration>
+```
+### logback automatically reloading configuration file upon modification
+In order to instruct logback-classic to scan for changes in its configuration file and to automatically re-configure itself set the scan attribute of the <configuration> element to true, as shown next.
+
+```
+<configuration scan="true" scanPeriod="30 seconds"> 
+  ... 
+</configuration> 
+```
+ If no unit of time is specified, then the unit of time is assumed to be milliseconds.
+### 在网页上看日志
+logback还内置一个servlet called `ViewStatusMessagesServlet`.见[Viewing status messages](http://logback.qos.ch/manual/configuration.html#viewingStatusMessages)。
+### Configuration File Syntax
+配置包括Logger、ROOT、Appender三部分。
+#### 大小写
+配置文件的`tag names`从`0.9.17`版本之后是非大小写敏感的，但是同一个tag的开合最好一致，如`<XYZ></xyz>`这种是不行的。命名推荐采用驼峰格式。
+#### Logger
+The `<logger>` element may contain zero or more `<appender-ref>` elements; each appender thus referenced is added to the named logger. Note that **unlike log4j, logback-classic does not close nor remove any previously referenced appenders when configuring a given logger**.  
+The `<root>` element configures the root logger.   
+举例如下：
+
+```
+  <logger name="chapters.configuration" level="INFO"/>
+
+  <!-- Strictly speaking, the level attribute is not necessary since -->
+  <!-- the level of the root level is set to DEBUG by default.       -->
+  <root level="DEBUG">          
+    <appender-ref ref="STDOUT" />
+  </root> 
+```
+
+#### Appender
+An appender is configured with the `<appender>` element, which takes `two mandatory` attributes `name` and `class`. The name attribute specifies the name of the appender whereas the class attribute specifies the fully qualified name of the appender class to instantiate.上述2个属性是必须的，另外可以包含0到多个`<layout>` 、`<encoder>`、`<filter>`子元素。这三个元素在manual相应的章节均有详细说明。
+
+![appenderSyntax.png](img/appenderSyntax.png)
+
+示例：
+
+```
+<configuration>
+  <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+    <file>myApp.log</file>
+    <encoder>
+      <pattern>%date %level [%thread] %logger{10} [%file:%line] %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <root level="debug">
+    <appender-ref ref="FILE" />
+    <appender-ref ref="STDOUT" />
+  </root>
+</configuration>
+```
+
+Appenders are **cumulative**:累加性，当同一个Appender在某Logger以及其祖先Logger里被声明时，会导致重复输出日志到同一个Logger（一句日志打多遍）。此时`Appender additivity`显得非常有用，**additivity**设置为**false**可以阻断其后代节点向其祖先节点声明的Appender中打日志。
+
+#### Logger Context
+Every logger is attached to a `logger context`. By default, the logger context is called "default". However, you can set a different name with the help of the `<contextName>` configuration directive. Note that once set, the logger context name **cannot be changed**. Setting the context name is a simple and straightforward method in order to **distinguish between multiple applications logging to the same target**.  
+示例：
+
+```
+<configuration>
+  <contextName>myAppName</contextName>
+   ······
+</configuration>
+
+```
 
 
 
