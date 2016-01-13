@@ -294,6 +294,105 @@ Every logger is attached to a `logger context`. By default, the logger context i
 
 ```
 
+#### Variables Substitution
+ For property `aName`, the string `${aName}` will be replaced with the value held by the `aName property`. Variables can be defined within the configuration file itself, in an external file, in an external resource or even computed and defined on the fly. Variables have a scope.   
+The `HOSTNAME` and `CONTEXT_NAME` variables are automatically defined and have **context scope**.  
+For historical reasons, the XML element for defining variables is `<property>` although in logback 1.0.7 and later the element `<variable>` can be used interchangeably.  
+还可以引用系统属性，引用方法一致。java添加系统属性的方法：  
+
+	java -DUSER_HOME="/home/sebastien" MyApp2
+
+Example：  
+
+
+```
+  <property name="USER_HOME" value="/home/sebastien" />
+
+  <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+    <file>${USER_HOME}/myApp.log</file>
+    <encoder>
+      <pattern>%msg%n</pattern>
+    </encoder>
+  </appender>
+
+```
+
+引用属性文件：
+
+	<property file="src/main/java/chapters/configuration/variables1.properties" />
+或者引用classpath里的属性文件：
+
+	<property resource="resource1.properties" />
+
+A property can be defined for insertion in `local scope`, in `context scope`, or in `system scope`. Local scope is the default. 
+
+**LOCAL SCOPE** 该变量的生命周期从变量在配置文件的定义开始，到该配置文件被执行或打断为止。
+
+**CONTEXT SCOPE** 该变量在context的生命周期内均有效，包括所有 logging events.
+
+**SYSTEM SCOPE** 该变量被插入到JVM的系统变量，生命周期同该JVM.
+
+变量替换优先级：
+
+	local > context > system > OS environment(java的 System.getenv()得到的环境变量MAP)
+
+另外还能包含JNDI的变量。  
+scope的设置：
+
+	 <property scope="context" name="nodeId" value="firstNode" />
+
+另外还支持include另一个xml里的部分内容到配置文件，不详述。
+
+logback支持`value nesting`，就是一个变量的value可以引用变量，也支持`name nesting`，变量的名字也可引用变量，如`${${userid}.password}`。
+
+
+
+
+The **timestamp element** can define a property according to **current date and time**.   
+另外再提一下`HOSTNAME` and `CONTEXT_NAME` variables。这两个看来还是比较有用的，特别是主机名，在分布式的系统里，日志聚集后需要有这个来区分各个主机上的日志。
+
+
+```
+<timestamp key="bySecond" datePattern="yyyyMMdd'T'HHmmss"/>
+
+  <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+    <!-- use the previously created timestamp to create a uniquely
+         named log file -->
+    <file>log-${bySecond}.txt</file>
+    <encoder>
+      <pattern>%logger{35} - %msg%n</pattern>
+    </encoder>
+  </appender>
+```
+
+
+
+#### Conditional processing of configuration files
+condition里是java语法的表达式。
+
+示例：
+
+```
+
+  <if condition='property("HOSTNAME").contains("torino")'>
+    <then>
+      <appender name="CON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+          <pattern>%d %-5level %logger{35} - %msg %n</pattern>
+        </encoder>
+      </appender>
+      <root>
+        <appender-ref ref="CON" />
+      </root>
+    </then>
+  </if>
+```
+
+### context listener
+ `LoggerContextListener interface`的实例可以监听`logging context`生命周期里的事件。这个可能是。。。我们实现了一个实现了改接口的类，可以把这个类配置到这里，然后我们就可以在类里响应声明周期的事件（start,stop,reset,levelChange）。
+
+
+
 
 
 
