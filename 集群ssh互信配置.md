@@ -49,6 +49,7 @@ Last login: Thu Jan 18 16:19:00 2016 from n26
   ```
 3. 将26机器上的/home/hadoop/.ssh/authorized_keys文件拷贝到27-30机器相同目录下。  
 下面以在node27上操作为例，其他机器操作相同，在必要的时候需要输入对应用户的密码：  
+
   ```
 [hadoop@node26 ~]$ scp /home/hadoop/.ssh/authorized_keys hadoop@node27:/home/hadoop/.ssh/
 hadoop@node27's password: 
