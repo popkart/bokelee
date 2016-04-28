@@ -29,7 +29,7 @@ cloudera的CDH5下载目录在：<http://archive.cloudera.com/cdh5/cdh/5/>
 
 ## 环境
 1. hadoop用`maven`管理工程，故需要配置maven环境变量。
-2. `probuf2.5.0`需要用到，下载`probuf2.5.0`源码（github上也有，tag里），先编译它。编译它又要用到其他的依赖，先安装:  
+2. `probuf2.5.0`需要用到，下载`probuf2.5.0`源码<https://github.com/google/protobuf/releases/download/v2.5.0/protobuf-2.5.0.zip>（github上也有，tag里），先编译它。编译它又要用到其他的依赖，先安装:  
 	yum install gcc  
 	yum intall gcc-c++  
 	yum install make 
