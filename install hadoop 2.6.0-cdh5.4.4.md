@@ -209,7 +209,7 @@ OK，在hadoop用户下从26上传送配置好的hadoop安装目录到27-30各�
 
 ### 格式化datanode
 namenode上：
-`hdfs -format namenode`
+`hdfs namenode -format`
 
 ### 启动hdfs
 `start-dfs.sh`
