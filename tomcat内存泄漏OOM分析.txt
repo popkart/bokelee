@@ -16,5 +16,9 @@ jmap -heap <pid>显示堆内存占用百分比。
 此时导出dump文件，拿回使用eclipse的MAT插件进行分析，查找内存占用较多的对象以及持有线程stack，可定位问题。jhat性能较低，且比较难用。
 jmap -dump:file=tomcatdumo.prof,format=b <pid>
 
+jmap -histo:live <pid>
+或者
+jmap -dump:live,file=xx.bin <pid>
+命令可以手工触发FullGC。
 
 有一种方式使用gdb动态更改java虚拟机参数。
