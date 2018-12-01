@@ -1,0 +1,20 @@
+查看内存占用，可以用jstat进行。
+jstat -gc <pid> 5000 //5秒执行一次gc统计
+S0C //Survivor 0 capacity
+S0U //Survivor 0 used
+S1C //Survivor 1 capacity
+...
+EC //Eden Space capacity 
+...
+OC // Old Gen capacity
+OU // Old Gen used 重点关注老年代大小，使用超过比例引发FullGC
+
+jmap -heap <pid>显示堆内存占用百分比。
+
+持续观察内存变化，当fullgc频繁发生（一秒都一次）时，观察一般会发现老年代GC回收不下去。此时可能有大量对象无法释放。
+
+此时导出dump文件，拿回使用eclipse的MAT插件进行分析，查找内存占用较多的对象以及持有线程stack，可定位问题。jhat性能较低，且比较难用。
+jmap -dump:file=tomcatdumo.prof,format=b <pid>
+
+
+有一种方式使用gdb动态更改java虚拟机参数。
